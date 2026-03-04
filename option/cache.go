@@ -3,12 +3,12 @@ package option
 import (
 	"time"
 
+	C "github.com/iantsysog/sing-rule/constant"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
 	"github.com/sagernet/sing/common/json/badoption"
-	C "github.com/sagernet/srsc/constant"
 )
 
 type _CacheOptions struct {

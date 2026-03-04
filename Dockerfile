@@ -1,7 +1,7 @@
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 LABEL maintainer="nekohasekai <contact-git@sekai.icu>"
-COPY . /go/src/github.com/sagernet/srsc
-WORKDIR /go/src/github.com/sagernet/srsc
+COPY . /go/src/github.com/iantsysog/sing-rule
+WORKDIR /go/src/github.com/iantsysog/sing-rule
 ARG TARGETOS TARGETARCH
 ARG GOPROXY=""
 ENV GOPROXY ${GOPROXY}
@@ -15,7 +15,7 @@ RUN set -ex \
     && go build -v -trimpath -tags \
         "with_acme" \
         -o /go/bin/srsc \
-        -ldflags "-X \"github.com/sagernet/srsc/constant.Version=$VERSION\" -s -w -buildid=" \
+        -ldflags "-X \"github.com/iantsysog/sing-rule/constant.Version=$VERSION\" -s -w -buildid=" \
         ./cmd/srsc
 FROM --platform=$TARGETPLATFORM alpine AS dist
 LABEL maintainer="nekohasekai <contact-git@sekai.icu>"

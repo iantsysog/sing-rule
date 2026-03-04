@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	C "github.com/iantsysog/sing-rule/constant"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/logger"
-	"github.com/sagernet/srsc/adapter"
-	C "github.com/sagernet/srsc/constant"
 )
 
 var _ adapter.Convertor = (*RuleSet)(nil)

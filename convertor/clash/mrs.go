@@ -8,14 +8,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	"github.com/iantsysog/sing-rule/convertor/internal/meta_cidr"
+	"github.com/iantsysog/sing-rule/convertor/internal/meta_domainset"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/rw"
-	"github.com/sagernet/srsc/adapter"
-	"github.com/sagernet/srsc/convertor/internal/meta_cidr"
-	"github.com/sagernet/srsc/convertor/internal/meta_domainset"
 
 	"github.com/klauspost/compress/zstd"
 	"golang.org/x/exp/slices"
@@ -157,6 +157,9 @@ func toMrs(behavior string, rules []adapter.Rule) ([]byte, error) {
 	}
 	if behavior == "domain" {
 		domainSet := domainTrie.NewDomainSet()
+		if domainSet == nil {
+			return []byte{}, nil
+		}
 		err = domainSet.WriteBin(encoder)
 		if err != nil {
 			return nil, E.Cause(err, "compile mrs")

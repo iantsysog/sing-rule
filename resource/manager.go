@@ -4,16 +4,16 @@ import (
 	"context"
 	"os"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/convertor"
+	"github.com/iantsysog/sing-rule/option"
+	"github.com/iantsysog/sing-rule/source"
 	boxConstant "github.com/sagernet/sing-box/constant"
 	boxOption "github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service"
-	"github.com/sagernet/srsc/adapter"
-	C "github.com/sagernet/srsc/constant"
-	"github.com/sagernet/srsc/convertor"
-	"github.com/sagernet/srsc/option"
-	"github.com/sagernet/srsc/source"
 )
 
 var _ adapter.ResourceManager = (*Manager)(nil)

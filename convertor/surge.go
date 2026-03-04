@@ -6,11 +6,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/convertor/clash"
 	boxConstant "github.com/sagernet/sing-box/constant"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/srsc/adapter"
-	C "github.com/sagernet/srsc/constant"
-	"github.com/sagernet/srsc/convertor/clash"
 )
 
 var _ adapter.Convertor = (*SurgeRuleSet)(nil)

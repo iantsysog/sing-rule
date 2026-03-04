@@ -3,7 +3,7 @@ package constant
 import (
 	"strings"
 
-	"github.com/sagernet/srsc/common/semver"
+	"github.com/iantsysog/sing-rule/common/semver"
 )
 
 type Platform string

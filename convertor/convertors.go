@@ -1,10 +1,10 @@
 package convertor
 
 import (
-	"github.com/sagernet/srsc/adapter"
-	C "github.com/sagernet/srsc/constant"
-	"github.com/sagernet/srsc/convertor/adguard"
-	"github.com/sagernet/srsc/convertor/clash"
+	"github.com/iantsysog/sing-rule/adapter"
+	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/convertor/adguard"
+	"github.com/iantsysog/sing-rule/convertor/clash"
 )
 
 var Convertors = map[string]adapter.Convertor{

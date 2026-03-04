@@ -11,6 +11,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/option"
 	boxAdapter "github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/tls"
@@ -25,9 +28,6 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	aTLS "github.com/sagernet/sing/common/tls"
-	"github.com/sagernet/srsc/adapter"
-	C "github.com/sagernet/srsc/constant"
-	"github.com/sagernet/srsc/option"
 )
 
 var _ adapter.Source = (*Remote)(nil)
@@ -62,7 +62,7 @@ func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, erro
 	}
 	var tlsConfig tls.Config
 	if options.RemoteOptions.TLS != nil && options.RemoteOptions.TLS.Enabled {
-		tlsConfig, err = tls.NewClient(ctx, serverAddress, common.PtrValueOrDefault(options.RemoteOptions.TLS))
+		tlsConfig, err = tls.NewClient(ctx, logger.NOP(), serverAddress, common.PtrValueOrDefault(options.RemoteOptions.TLS))
 		if err != nil {
 			return nil, E.Cause(err, "create TLS config")
 		}

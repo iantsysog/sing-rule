@@ -12,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/iantsysog/sing-rule"
+	"github.com/iantsysog/sing-rule/option"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	boxOption "github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
-	"github.com/sagernet/srsc"
-	"github.com/sagernet/srsc/option"
 
 	"github.com/spf13/cobra"
 )

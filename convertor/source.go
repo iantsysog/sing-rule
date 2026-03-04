@@ -5,14 +5,15 @@ import (
 	"context"
 	"strings"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	"github.com/iantsysog/sing-rule/common/semver"
+	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/convertor/asn"
 	boxConstant "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
-	"github.com/sagernet/srsc/adapter"
-	"github.com/sagernet/srsc/common/semver"
-	C "github.com/sagernet/srsc/constant"
 )
 
 var _ adapter.Convertor = (*RuleSetSource)(nil)
@@ -43,6 +44,14 @@ func (s *RuleSetSource) To(ctx context.Context, contentRules []adapter.Rule, opt
 	if err != nil {
 		return nil, err
 	}
+
+	if options.Metadata.Platform == C.PlatformSingBox {
+		convertedRules, err = asn.ConvertIPASNToIPCIDR(ctx, convertedRules)
+		if err != nil {
+			return nil, E.Cause(err, "convert IP-ASN to IP-CIDR")
+		}
+	}
+
 	ruleSet := &option.PlainRuleSetCompat{
 		Version: boxConstant.RuleSetVersionCurrent,
 		Options: option.PlainRuleSet{

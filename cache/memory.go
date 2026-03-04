@@ -3,10 +3,10 @@ package cache
 import (
 	"time"
 
+	"github.com/iantsysog/sing-rule/adapter"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/contrab/freelru"
 	"github.com/sagernet/sing/contrab/maphash"
-	"github.com/sagernet/srsc/adapter"
 )
 
 var _ adapter.Cache = (*MemoryCache)(nil)

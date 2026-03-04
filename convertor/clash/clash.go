@@ -7,10 +7,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	C "github.com/iantsysog/sing-rule/constant"
 	boxConstant "github.com/sagernet/sing-box/constant"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/srsc/adapter"
-	C "github.com/sagernet/srsc/constant"
 
 	"gopkg.in/yaml.v3"
 )

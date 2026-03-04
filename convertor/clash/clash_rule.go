@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	"github.com/iantsysog/sing-rule/convertor/internal/meta_utils"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ranges"
-	"github.com/sagernet/srsc/adapter"
-	"github.com/sagernet/srsc/convertor/internal/meta_utils"
 
 	"github.com/bahlo/generic-list-go"
 	"golang.org/x/exp/slices"

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sagernet/srsc/convertor/internal/meta_utils"
+	"github.com/iantsysog/sing-rule/convertor/internal/meta_utils"
 
 	"github.com/openacid/low/bitmap"
 )

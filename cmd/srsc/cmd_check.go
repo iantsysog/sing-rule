@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
+	"github.com/iantsysog/sing-rule"
 	"github.com/sagernet/sing-box/log"
-	"github.com/sagernet/srsc"
 
 	"github.com/spf13/cobra"
 )

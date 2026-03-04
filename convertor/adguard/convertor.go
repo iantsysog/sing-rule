@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/iantsysog/sing-rule/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
-	"github.com/sagernet/srsc/adapter"
 )
 
 type adguardRuleLine struct {

@@ -45,5 +45,7 @@ func IsDestinationAddressRule(rule DefaultRule) bool {
 	defaultRule.IPCIDR = rule.IPCIDR
 	defaultRule.GEOIP = rule.GEOIP
 	defaultRule.IPASN = rule.IPASN
+	// defaultRule.AdGuardDomain = rule.AdGuardDomain
+	// defaultRule.Invert = rule.Invert
 	return reflect.DeepEqual(rule, defaultRule)
 }

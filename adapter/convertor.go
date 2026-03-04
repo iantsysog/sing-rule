@@ -3,8 +3,8 @@ package adapter
 import (
 	"context"
 
-	C "github.com/sagernet/srsc/constant"
-	"github.com/sagernet/srsc/option"
+	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/option"
 )
 
 type Convertor interface {

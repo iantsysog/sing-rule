@@ -7,9 +7,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	"github.com/iantsysog/sing-rule/option"
 	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/srsc/adapter"
-	"github.com/sagernet/srsc/option"
 )
 
 var _ adapter.Source = (*Local)(nil)

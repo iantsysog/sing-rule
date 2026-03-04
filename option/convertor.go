@@ -1,10 +1,10 @@
 package option
 
 import (
+	C "github.com/iantsysog/sing-rule/constant"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
-	C "github.com/sagernet/srsc/constant"
 )
 
 type ConvertOptions struct {

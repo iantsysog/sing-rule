@@ -5,15 +5,15 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/iantsysog/sing-rule/adapter"
+	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/convertor"
+	"github.com/iantsysog/sing-rule/option"
+	"github.com/iantsysog/sing-rule/source"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/logger"
 	"github.com/sagernet/sing/service"
-	"github.com/sagernet/srsc/adapter"
-	C "github.com/sagernet/srsc/constant"
-	"github.com/sagernet/srsc/convertor"
-	"github.com/sagernet/srsc/option"
-	"github.com/sagernet/srsc/source"
 
 	"github.com/go-chi/chi/v5"
 )

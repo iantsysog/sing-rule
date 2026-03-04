@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/iantsysog/sing-rule/adapter"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/ranges"
-	"github.com/sagernet/srsc/adapter"
 )
 
 func ToSurgeLines(rule adapter.Rule) ([]string, error) {
