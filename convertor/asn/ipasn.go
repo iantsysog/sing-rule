@@ -15,19 +15,27 @@ func ConvertIPASNToIPCIDR(ctx context.Context, rules []adapter.Rule) ([]adapter.
 	}
 
 	var resolver *ASNResolver
-	if err := walkRules(rules, func(rule *adapter.Rule) error {
+	err := walkRules(rules, func(rule *adapter.Rule) error {
 		if rule.Type != constant.RuleTypeDefault {
 			return nil
 		}
+
 		defaultRule := &rule.DefaultOptions
 		if len(defaultRule.IPASN) == 0 && len(defaultRule.SourceIPASN) == 0 {
 			return nil
 		}
+
 		if resolver == nil {
-			resolver = NewASNResolver()
+			newResolver, err := NewASNResolver()
+			if err != nil {
+				return E.Cause(err, "create ASN resolver")
+			}
+			resolver = newResolver
 		}
+
 		return convertDefaultRuleIPASN(ctx, resolver, defaultRule)
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, E.Cause(err, "convert rule IP-ASN")
 	}
 
@@ -45,6 +53,7 @@ func resolveAndAppend(ctx context.Context, resolver *ASNResolver, source *[]stri
 	if len(*source) == 0 {
 		return nil
 	}
+
 	prefixes, err := resolver.ResolveASNs(ctx, *source)
 	if err != nil {
 		return err
@@ -52,6 +61,7 @@ func resolveAndAppend(ctx context.Context, resolver *ASNResolver, source *[]stri
 	if len(prefixes) > 0 {
 		*destination = append(*destination, prefixes...)
 	}
+
 	*source = nil
 	return nil
 }
@@ -60,22 +70,28 @@ func walkRules(rules []adapter.Rule, fn func(*adapter.Rule) error) error {
 	if len(rules) == 0 {
 		return nil
 	}
+
 	stack := make([]*adapter.Rule, 0, len(rules))
 	for i := range rules {
 		stack = append(stack, &rules[i])
 	}
+
 	for len(stack) > 0 {
-		idx := len(stack) - 1
-		rule := stack[idx]
-		stack = stack[:idx]
+		last := len(stack) - 1
+		rule := stack[last]
+		stack = stack[:last]
+
 		if err := fn(rule); err != nil {
 			return err
 		}
-		if rule.Type == constant.RuleTypeLogical {
-			for i := range rule.LogicalOptions.Rules {
-				stack = append(stack, &rule.LogicalOptions.Rules[i])
-			}
+
+		if rule.Type != constant.RuleTypeLogical {
+			continue
+		}
+		for i := range rule.LogicalOptions.Rules {
+			stack = append(stack, &rule.LogicalOptions.Rules[i])
 		}
 	}
+
 	return nil
 }
