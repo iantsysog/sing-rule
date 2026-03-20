@@ -50,7 +50,7 @@ func convertDefaultRuleIPASN(ctx context.Context, resolver *ASNResolver, rule *a
 }
 
 func resolveAndAppend(ctx context.Context, resolver *ASNResolver, source *[]string, destination *badoption.Listable[string]) error {
-	if len(*source) == 0 {
+	if source == nil || destination == nil || len(*source) == 0 {
 		return nil
 	}
 
@@ -67,7 +67,7 @@ func resolveAndAppend(ctx context.Context, resolver *ASNResolver, source *[]stri
 }
 
 func walkRules(rules []adapter.Rule, fn func(*adapter.Rule) error) error {
-	if len(rules) == 0 {
+	if len(rules) == 0 || fn == nil {
 		return nil
 	}
 

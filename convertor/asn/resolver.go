@@ -261,7 +261,7 @@ func (r *ASNResolver) ResolveASN(ctx context.Context, asn string) ([]string, err
 	}
 
 	if prefixes, ok := r.loadFromCache(asnID); ok {
-		return prefixes, nil
+		return slices.Clone(prefixes), nil
 	}
 
 	resolvedAny, err, _ := r.inflight.Do(asnID, func() (any, error) {
@@ -300,7 +300,7 @@ func (r *ASNResolver) loadFromCache(asnID string) ([]string, bool) {
 		r.cache.Delete(asnID)
 		return nil, false
 	}
-	return slices.Clone(prefixes), true
+	return prefixes, true
 }
 
 func (r *ASNResolver) ResolveASNs(ctx context.Context, asns []string) ([]string, error) {

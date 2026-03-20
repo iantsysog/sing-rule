@@ -40,7 +40,8 @@ func (s *RuleSetBinary) To(ctx context.Context, contentRules []adapter.Rule, opt
 		return nil, err
 	}
 
-	if options.Metadata.Platform == C.PlatformSingBox {
+	isSingBox := options.Metadata.Platform == C.PlatformSingBox
+	if isSingBox {
 		convertedRules, err = asn.ConvertIPASNToIPCIDR(ctx, convertedRules)
 		if err != nil {
 			return nil, E.Cause(err, "convert IP-ASN to IP-CIDR")
@@ -55,7 +56,7 @@ func (s *RuleSetBinary) To(ctx context.Context, contentRules []adapter.Rule, opt
 			}), adapter.Rule.ToHeadless),
 		},
 	}
-	if options.Metadata.Platform == C.PlatformSingBox && options.Metadata.Version != nil {
+	if isSingBox && options.Metadata.Version != nil {
 		Downgrade(ruleSet, options.Metadata.Version)
 	}
 	buffer := new(bytes.Buffer)
