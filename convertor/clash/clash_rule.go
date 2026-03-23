@@ -254,7 +254,14 @@ func fromClassicalLine(ruleLine string) (*adapter.Rule, error) {
 }
 
 func parseRule(ruleRaw string) (string, string, []string) {
+	ruleRaw = strings.TrimSpace(ruleRaw)
+	if ruleRaw == "" || strings.HasPrefix(ruleRaw, "#") {
+		return "", "", nil
+	}
 	item := strings.Split(ruleRaw, ",")
+	for i := range item {
+		item[i] = strings.TrimSpace(item[i])
+	}
 	if len(item) == 1 {
 		return "", item[0], nil
 	} else if len(item) == 2 {

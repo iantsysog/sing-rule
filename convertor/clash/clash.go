@@ -1,13 +1,13 @@
 package clash
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"strings"
 
 	"github.com/iantsysog/sing-rule/adapter"
 	C "github.com/iantsysog/sing-rule/constant"
+	"github.com/iantsysog/sing-rule/convertor/internal/lineparse"
 	boxConstant "github.com/sagernet/sing-box/constant"
 	E "github.com/sagernet/sing/common/exceptions"
 
@@ -52,11 +52,11 @@ func (c *RuleProvider) From(ctx context.Context, content []byte, options adapter
 				fromDomainLine(&rule, line)
 			}
 		} else {
-			scanner := bufio.NewScanner(bytes.NewReader(content))
-			for scanner.Scan() {
-				fromDomainLine(&rule, scanner.Text())
-			}
-			if err := scanner.Err(); err != nil {
+			err := lineparse.ForEach(content, func(line string) error {
+				fromDomainLine(&rule, line)
+				return nil
+			}, "#")
+			if err != nil {
 				return nil, E.Cause(err, "scan domain rules")
 			}
 		}
@@ -68,11 +68,11 @@ func (c *RuleProvider) From(ctx context.Context, content []byte, options adapter
 				fromIPCIDRLine(&rule, line)
 			}
 		} else {
-			scanner := bufio.NewScanner(bytes.NewReader(content))
-			for scanner.Scan() {
-				fromIPCIDRLine(&rule, scanner.Text())
-			}
-			if err := scanner.Err(); err != nil {
+			err := lineparse.ForEach(content, func(line string) error {
+				fromIPCIDRLine(&rule, line)
+				return nil
+			}, "#")
+			if err != nil {
 				return nil, E.Cause(err, "scan ipcidr rules")
 			}
 		}
@@ -83,24 +83,24 @@ func (c *RuleProvider) From(ctx context.Context, content []byte, options adapter
 			for _, line := range lines {
 				rule, err := fromClassicalLine(line)
 				if err != nil {
-					return nil, E.Cause(err, "parse classical rule")
+					continue
 				}
 				if rule != nil {
 					rules = append(rules, *rule)
 				}
 			}
 		} else {
-			scanner := bufio.NewScanner(bytes.NewReader(content))
-			for scanner.Scan() {
-				rule, err := fromClassicalLine(scanner.Text())
+			err := lineparse.ForEach(content, func(line string) error {
+				rule, err := fromClassicalLine(line)
 				if err != nil {
-					return nil, E.Cause(err, "parse classical rule")
+					return nil
 				}
 				if rule != nil {
 					rules = append(rules, *rule)
 				}
-			}
-			if err := scanner.Err(); err != nil {
+				return nil
+			}, "#")
+			if err != nil {
 				return nil, E.Cause(err, "scan classical rules")
 			}
 		}
@@ -153,6 +153,7 @@ func (c *RuleProvider) To(ctx context.Context, contentRules []adapter.Rule, opti
 }
 
 func fromDomainLine(rule *adapter.DefaultRule, ruleLine string) {
+	ruleLine = strings.TrimSpace(ruleLine)
 	if ruleLine == "" || strings.HasPrefix(ruleLine, "#") {
 		return
 	}
@@ -172,6 +173,7 @@ func fromDomainLine(rule *adapter.DefaultRule, ruleLine string) {
 }
 
 func fromIPCIDRLine(rule *adapter.DefaultRule, ruleLine string) {
+	ruleLine = strings.TrimSpace(ruleLine)
 	if ruleLine == "" || strings.HasPrefix(ruleLine, "#") {
 		return
 	}

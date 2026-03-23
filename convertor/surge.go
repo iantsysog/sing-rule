@@ -1,7 +1,6 @@
 package convertor
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/iantsysog/sing-rule/adapter"
 	C "github.com/iantsysog/sing-rule/constant"
 	"github.com/iantsysog/sing-rule/convertor/clash"
+	"github.com/iantsysog/sing-rule/convertor/internal/lineparse"
 	boxConstant "github.com/sagernet/sing-box/constant"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -30,35 +30,31 @@ func (s *SurgeRuleSet) From(ctx context.Context, content []byte, options adapter
 	switch behavior {
 	case "", "classical":
 		var rules []adapter.Rule
-		scanner := bufio.NewScanner(bytes.NewReader(content))
-		for scanner.Scan() {
-			rule, err := clash.FromSurgeLine(scanner.Text())
+		err := lineparse.ForEach(content, func(ruleLine string) error {
+			rule, err := clash.FromSurgeLine(ruleLine)
 			if err != nil {
-				return nil, E.Cause(err, "parse Surge rule")
+				return nil
 			}
 			if rule != nil {
 				rules = append(rules, *rule)
 			}
-		}
-		if err := scanner.Err(); err != nil {
+			return nil
+		}, "#")
+		if err != nil {
 			return nil, E.Cause(err, "scan Surge rules")
 		}
 		return adapter.MergeRules(rules), nil
 	case "domain":
 		var rule adapter.DefaultRule
-		scanner := bufio.NewScanner(bytes.NewReader(content))
-		for scanner.Scan() {
-			ruleLine := strings.TrimSpace(scanner.Text())
-			if ruleLine == "" || strings.HasPrefix(ruleLine, "#") {
-				continue
-			}
+		err := lineparse.ForEach(content, func(ruleLine string) error {
 			if after, ok := strings.CutPrefix(ruleLine, "."); ok {
 				rule.DomainSuffix = append(rule.DomainSuffix, after)
 			} else {
 				rule.Domain = append(rule.Domain, ruleLine)
 			}
-		}
-		if err := scanner.Err(); err != nil {
+			return nil
+		}, "#")
+		if err != nil {
 			return nil, E.Cause(err, "scan Surge domain rules")
 		}
 		return []adapter.Rule{{Type: boxConstant.RuleTypeDefault, DefaultOptions: rule}}, nil
