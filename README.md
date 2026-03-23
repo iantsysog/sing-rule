@@ -4,7 +4,7 @@ The rule-set convertor for sing-box.
 
 ## Documentation
 
-In progress...
+See [/docs](/docs/).
 
 ## License
 
