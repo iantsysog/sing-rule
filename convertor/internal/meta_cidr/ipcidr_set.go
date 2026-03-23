@@ -9,7 +9,7 @@ import (
 )
 
 type IpCidrSet struct {
-	// must same with netipx.IPSet
+	// Must match netipx.IPSet layout.
 	rr []netipx.IPRange
 }
 
@@ -43,10 +43,13 @@ func (set *IpCidrSet) IsContainForString(ipString string) bool {
 }
 
 func (set *IpCidrSet) IsContain(ip netip.Addr) bool {
+	if set == nil {
+		return false
+	}
 	return set.ToIPSet().Contains(ip.WithZone(""))
 }
 
-// MatchIp implements C.IpMatcher
+// MatchIp implements C.IpMatcher.
 func (set *IpCidrSet) MatchIp(ip netip.Addr) bool {
 	if set.IsEmpty() {
 		return false
@@ -55,6 +58,9 @@ func (set *IpCidrSet) MatchIp(ip netip.Addr) bool {
 }
 
 func (set *IpCidrSet) Merge() error {
+	if set == nil || len(set.rr) == 0 {
+		return nil
+	}
 	var b netipx.IPSetBuilder
 	b.AddSet(set.ToIPSet())
 	i, err := b.IPSet()
@@ -70,6 +76,9 @@ func (set *IpCidrSet) IsEmpty() bool {
 }
 
 func (set *IpCidrSet) Foreach(f func(prefix netip.Prefix) bool) {
+	if set == nil || f == nil {
+		return
+	}
 	for _, r := range set.rr {
 		for _, prefix := range r.Prefixes() {
 			if !f(prefix) {
@@ -79,12 +88,18 @@ func (set *IpCidrSet) Foreach(f func(prefix netip.Prefix) bool) {
 	}
 }
 
-// ToIPSet not safe convert to *netipx.IPSet
-// be careful, must be used after Merge
+// ToIPSet performs an unsafe conversion to *netipx.IPSet.
+// Call Merge before using it.
 func (set *IpCidrSet) ToIPSet() *netipx.IPSet {
+	if set == nil {
+		return nil
+	}
 	return (*netipx.IPSet)(unsafe.Pointer(set))
 }
 
 func (set *IpCidrSet) fromIPSet(i *netipx.IPSet) {
+	if set == nil || i == nil {
+		return
+	}
 	*set = *(*IpCidrSet)(unsafe.Pointer(i))
 }

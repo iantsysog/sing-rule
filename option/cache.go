@@ -1,6 +1,7 @@
 package option
 
 import (
+	"strings"
 	"time"
 
 	C "github.com/iantsysog/sing-rule/constant"
@@ -20,14 +21,17 @@ type _CacheOptions struct {
 type CacheOptions _CacheOptions
 
 func (o CacheOptions) MarshalJSON() ([]byte, error) {
+	cacheType := strings.ToLower(strings.TrimSpace(o.Type))
 	var v any
-	switch o.Type {
+	switch cacheType {
+	case "", C.CacheTypeMemory:
 	case C.CacheTypeRedis:
 		v = o.RedisOptions
-	case "":
-		return nil, E.New("missing cache type")
 	default:
 		return nil, E.New("unknown cache type: " + o.Type)
+	}
+	if v == nil {
+		return json.Marshal((_CacheOptions)(o))
 	}
 	return badjson.MarshallObjects((_CacheOptions)(o), v)
 }
@@ -37,12 +41,17 @@ func (o *CacheOptions) UnmarshalJSON(bytes []byte) error {
 	if err != nil {
 		return err
 	}
+	o.Type = strings.ToLower(strings.TrimSpace(o.Type))
 	var v any
 	switch o.Type {
+	case "", C.CacheTypeMemory:
 	case C.CacheTypeRedis:
 		v = &o.RedisOptions
 	default:
 		return E.New("unknown cache type: " + o.Type)
+	}
+	if v == nil {
+		return nil
 	}
 	return badjson.UnmarshallExcluded(bytes, (*_CacheOptions)(o), v)
 }

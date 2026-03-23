@@ -20,24 +20,7 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
-
-	"github.com/spf13/cobra"
 )
-
-var commandRun = &cobra.Command{
-	Use:   "run",
-	Short: "Run service",
-	Run: func(cmd *cobra.Command, args []string) {
-		err := run()
-		if err != nil {
-			log.Fatal(err)
-		}
-	},
-}
-
-func init() {
-	mainCommand.AddCommand(commandRun)
-}
 
 type OptionsEntry struct {
 	content []byte
@@ -70,7 +53,7 @@ func readConfigAt(path string) (*OptionsEntry, error) {
 }
 
 func readConfig() ([]*OptionsEntry, error) {
-	var optionsList []*OptionsEntry
+	optionsList := make([]*OptionsEntry, 0, len(configPaths))
 	for _, path := range configPaths {
 		optionsEntry, err := readConfigAt(path)
 		if err != nil {
@@ -83,11 +66,15 @@ func readConfig() ([]*OptionsEntry, error) {
 		if err != nil {
 			return nil, E.Cause(err, "read config directory at ", directory)
 		}
+		directoryPath := directory
+		if directoryPath == "" {
+			directoryPath = "."
+		}
 		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name(), ".json") || entry.IsDir() {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 				continue
 			}
-			optionsEntry, err := readConfigAt(filepath.Join(directory, entry.Name()))
+			optionsEntry, err := readConfigAt(filepath.Join(directoryPath, entry.Name()))
 			if err != nil {
 				return nil, err
 			}
@@ -143,24 +130,7 @@ func create() (*srsc.Server, context.CancelFunc, error) {
 		cancel()
 		return nil, nil, E.Cause(err, "create service")
 	}
-
-	osSignals := make(chan os.Signal, 1)
-	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	defer func() {
-		signal.Stop(osSignals)
-		close(osSignals)
-	}()
-	startCtx, finishStart := context.WithCancel(context.Background())
-	go func() {
-		_, loaded := <-osSignals
-		if loaded {
-			cancel()
-			closeMonitor(startCtx)
-		}
-	}()
-	err = instance.Start()
-	finishStart()
-	if err != nil {
+	if err = instance.Start(); err != nil {
 		cancel()
 		return nil, nil, E.Cause(err, "start service")
 	}
@@ -187,14 +157,18 @@ func run() error {
 				}
 			}
 			cancel()
-			closeCtx, closed := context.WithCancel(context.Background())
+			closeCtx, closeCancel := context.WithCancel(context.Background())
 			go closeMonitor(closeCtx)
 			err = instance.Close()
-			closed()
+			closeCancel()
 			if osSignal != syscall.SIGHUP {
 				if err != nil {
-					log.Error(E.Cause(err, "srsc did not closed properly"))
+					log.Error(E.Cause(err, "srsc did not close properly"))
 				}
+				return nil
+			}
+			if err != nil {
+				log.Error(E.Cause(err, "close service before reload"))
 				return nil
 			}
 			break
@@ -203,11 +177,12 @@ func run() error {
 }
 
 func closeMonitor(ctx context.Context) {
-	time.Sleep(C.FatalStopTimeout)
+	timer := time.NewTimer(C.FatalStopTimeout)
+	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return
-	default:
+	case <-timer.C:
 	}
 	log.Fatal("srsc did not close!")
 }

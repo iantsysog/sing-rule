@@ -1,7 +1,6 @@
 package trie
 
-// Package succinct provides several succinct data types.
-// Modify from https://github.com/openacid/succinct/blob/d4684c35d123f7528b14e03c24327231723db704/sskv.go
+// Adapted from https://github.com/openacid/succinct/blob/d4684c35d123f7528b14e03c24327231723db704/sskv.go
 
 import (
 	"sort"
@@ -26,15 +25,17 @@ type DomainSet struct {
 
 type qElt struct{ s, e, col int }
 
-// NewDomainSet creates a new *DomainSet struct, from a DomainTrie.
+// NewDomainSet builds a DomainSet from a DomainTrie.
 func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
+	if t == nil || t.root == nil {
+		return nil
+	}
 	reserveDomains := make([]string, 0)
 	t.Foreach(func(domain string, data T) bool {
 		reserveDomains = append(reserveDomains, utils.Reverse(domain))
 		return true
 	})
-	// ensure that the same prefix is continuous
-	// and according to the ascending sequence of length
+	// Keep identical prefixes contiguous and ordered by lexicographic length progression.
 	sort.Strings(reserveDomains)
 	keys := reserveDomains
 	if len(keys) == 0 {
@@ -48,7 +49,7 @@ func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
 		elt := queue[i]
 		if elt.col == len(keys[elt.s]) {
 			elt.s++
-			// a leaf node
+			// Leaf node.
 			setBit(&ss.leaves, i, 1)
 		}
 
@@ -71,16 +72,14 @@ func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
 	return ss
 }
 
-// Has query for a key and return whether it presents in the DomainSet.
+// Has reports whether key exists in the DomainSet.
 func (ss *DomainSet) Has(key string) bool {
-	if ss == nil {
+	if ss == nil || len(ss.labelBitmap) == 0 || len(ss.leaves) == 0 {
 		return false
 	}
 	key = utils.Reverse(key)
 	key = strings.ToLower(key)
-	// no more labels in this node
-	// skip character matching
-	// go to next level
+	// Advance when no label matches at the current node.
 	nodeId, bmIdx := 0, 0
 	type wildcardCursor struct {
 		bmIdx, index int
@@ -94,7 +93,7 @@ func (ss *DomainSet) Has(key string) bool {
 				if len(stack) > 0 {
 					cursor := stack[len(stack)-1]
 					stack = stack[0 : len(stack)-1]
-					// back wildcard and find next node
+					// Backtrack wildcard and locate the next node.
 					nextNodeId := countZeros(ss.labelBitmap, ss.ranks, cursor.bmIdx+1)
 					nextBmIdx := selectIthOne(ss.labelBitmap, ss.ranks, ss.selects, nextNodeId-1) + 1
 					j := cursor.index
@@ -118,7 +117,7 @@ func (ss *DomainSet) Has(key string) bool {
 				}
 				return false
 			}
-			// handle wildcard for domain
+			// Handle domain wildcard labels.
 			if ss.labels[bmIdx-nodeId] == complexWildcardByte {
 				return true
 			} else if ss.labels[bmIdx-nodeId] == wildcardByte {
@@ -138,6 +137,9 @@ func (ss *DomainSet) Has(key string) bool {
 }
 
 func (ss *DomainSet) keys(f func(key string) bool) {
+	if ss == nil || f == nil || len(ss.labelBitmap) == 0 {
+		return
+	}
 	var currentKey []byte
 	var traverse func(int, int) bool
 	traverse = func(nodeId, bmIdx int) bool {
@@ -163,16 +165,18 @@ func (ss *DomainSet) keys(f func(key string) bool) {
 	}
 
 	traverse(0, 0)
-	return
 }
 
 func (ss *DomainSet) Foreach(f func(key string) bool) {
+	if ss == nil || f == nil {
+		return
+	}
 	ss.keys(func(key string) bool {
 		return f(utils.Reverse(key))
 	})
 }
 
-// MatchDomain implements C.DomainMatcher
+// MatchDomain implements C.DomainMatcher.
 func (ss *DomainSet) MatchDomain(domain string) bool {
 	return ss.Has(domain)
 }
@@ -185,17 +189,22 @@ func setBit(bm *[]uint64, i int, v int) {
 }
 
 func getBit(bm []uint64, i int) uint64 {
+	if i < 0 || i>>6 >= len(bm) {
+		return 0
+	}
 	return bm[i>>6] & (1 << uint(i&63))
 }
 
-// init builds pre-calculated cache to speed up rank() and select()
+// init builds precomputed indexes for rank and select.
 func (ss *DomainSet) init() {
+	if ss == nil {
+		return
+	}
 	ss.selects, ss.ranks = bitmap.IndexSelect32R64(ss.labelBitmap)
 }
 
-// countZeros counts the number of "0" in a bitmap before the i-th bit(excluding
-// the i-th bit) on behalf of rank index.
-// E.g.:
+// countZeros returns the number of zero bits before index i (excluding i), using rank indexes.
+// Example:
 //
 //	countZeros("010010", 4) == 3
 //	//          012345
@@ -204,9 +213,8 @@ func countZeros(bm []uint64, ranks []int32, i int) int {
 	return i - int(a)
 }
 
-// selectIthOne returns the index of the i-th "1" in a bitmap, on behalf of rank
-// and select indexes.
-// E.g.:
+// selectIthOne returns the bit index of the i-th one bit using rank and select indexes.
+// Example:
 //
 //	selectIthOne("010010", 1) == 4
 //	//            012345

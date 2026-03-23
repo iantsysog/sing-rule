@@ -2,11 +2,12 @@ package source
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
+	"os"
 	"strings"
 	"text/template"
 	"time"
@@ -41,6 +42,9 @@ type Remote struct {
 }
 
 func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	pathTemplate := template.New("remote URL")
 	pathTemplate.Funcs(template.FuncMap{
 		"toLower": strings.ToLower,
@@ -71,22 +75,22 @@ func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, erro
 	dnsClient := dns.NewClient(dns.ClientOptions{
 		Logger: logger.NOP(),
 	})
+	dialRemote := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		destination := M.ParseSocksaddr(addr)
+		if M.IsDomainName(destination.Fqdn) {
+			addresses, lookupErr := dnsClient.Lookup(ctx, dnsTransport, destination.Fqdn, boxAdapter.DNSQueryOptions{}, nil)
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			return N.DialParallel(ctx, remoteDialer, network, destination, addresses, false, 0)
+		}
+		return remoteDialer.DialContext(ctx, network, destination)
+	}
 	var httpTransport *http.Transport
 	if tlsConfig != nil {
 		httpTransport = &http.Transport{
 			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				destination := M.ParseSocksaddr(addr)
-				var conn net.Conn
-				if destination.IsFqdn() {
-					var addresses []netip.Addr
-					addresses, err = dnsClient.Lookup(ctx, dnsTransport, destination.Fqdn, boxAdapter.DNSQueryOptions{}, nil)
-					if err != nil {
-						return nil, err
-					}
-					conn, err = N.DialParallel(ctx, remoteDialer, network, destination, addresses, false, 0)
-				} else {
-					conn, err = remoteDialer.DialContext(ctx, network, destination)
-				}
+				conn, err := dialRemote(ctx, network, addr)
 				if err != nil {
 					return nil, err
 				}
@@ -101,24 +105,7 @@ func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, erro
 		}
 	} else {
 		httpTransport = &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				destination := M.ParseSocksaddr(addr)
-				var conn net.Conn
-				if destination.IsFqdn() {
-					var addresses []netip.Addr
-					addresses, err = dnsClient.Lookup(ctx, dnsTransport, destination.Fqdn, boxAdapter.DNSQueryOptions{}, nil)
-					if err != nil {
-						return nil, err
-					}
-					conn, err = N.DialParallel(ctx, remoteDialer, network, destination, addresses, false, 0)
-				} else {
-					conn, err = remoteDialer.DialContext(ctx, network, destination)
-				}
-				if err != nil {
-					return nil, err
-				}
-				return conn, nil
-			},
+			DialContext:       dialRemote,
 			ForceAttemptHTTP2: true,
 		}
 	}
@@ -146,6 +133,9 @@ func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, erro
 }
 
 func (s *Remote) Path(urlParams map[string]string) (sourcePath string, err error) {
+	if s == nil || s.pathTemplate == nil {
+		return "", os.ErrInvalid
+	}
 	pathBuffer := buf.New()
 	defer pathBuffer.Release()
 	err = s.pathTemplate.Execute(pathBuffer, urlParams)
@@ -161,13 +151,21 @@ func (s *Remote) LastUpdated(_ string) time.Time {
 }
 
 func (s *Remote) Fetch(path string, requestBody adapter.FetchRequestBody) (body *adapter.FetchResponseBody, err error) {
-	if time.Now().Sub(requestBody.LastUpdated) < s.ttl {
+	if s == nil || s.httpClient == nil {
+		return nil, E.New("remote source is not initialized")
+	}
+	now := time.Now()
+	if !requestBody.LastUpdated.IsZero() && now.Sub(requestBody.LastUpdated) < s.ttl {
 		return &adapter.FetchResponseBody{
 			NotModified: true,
 			LastUpdated: requestBody.LastUpdated,
 		}, nil
 	}
-	request, err := http.NewRequestWithContext(s.ctx, http.MethodGet, path, nil)
+	requestCtx := s.ctx
+	if requestCtx == nil {
+		requestCtx = context.Background()
+	}
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, E.Cause(err, "create HTTP request")
 	}
@@ -180,23 +178,27 @@ func (s *Remote) Fetch(path string, requestBody adapter.FetchRequestBody) (body 
 		return nil, E.Cause(err, "fetch source: exchange HTTP request")
 	}
 	defer response.Body.Close()
-	if response.StatusCode == http.StatusNotModified {
+	switch response.StatusCode {
+	case http.StatusNotModified:
 		return &adapter.FetchResponseBody{
 			NotModified: true,
-			LastUpdated: time.Now(),
+			LastUpdated: now,
 		}, nil
-	} else if response.StatusCode != http.StatusOK {
+	case http.StatusOK:
+	default:
 		return nil, E.New("fetch source: unexpected HTTP response: " + response.Status)
 	}
 	content, err := io.ReadAll(response.Body)
 	if err != nil {
-		err = E.Cause(err, "fetch source: read HTTP response")
-		return
+		return nil, E.Cause(err, "fetch source: read HTTP response")
+	}
+	if len(content) == 0 {
+		return nil, errors.New("fetch source: empty HTTP response")
 	}
 	newETag := response.Header.Get("ETag")
 	return &adapter.FetchResponseBody{
 		Content:     content,
 		ETag:        newETag,
-		LastUpdated: time.Now(),
+		LastUpdated: now,
 	}, nil
 }

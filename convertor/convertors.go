@@ -8,9 +8,9 @@ import (
 )
 
 var Convertors = map[string]adapter.Convertor{
-	C.ConvertorTypeRuleSetSource:     (*RuleSetSource)(nil),
-	C.ConvertorTypeRuleSetBinary:     (*RuleSetBinary)(nil),
-	C.ConvertorTypeAdGuardRuleSet:    (*adguard.RuleSet)(nil),
-	C.ConvertorTypeClashRuleProvider: (*clash.RuleProvider)(nil),
-	C.ConvertorTypeSurgeRuleSet:      (*SurgeRuleSet)(nil),
+	C.ConvertorTypeRuleSetSource:     &RuleSetSource{},
+	C.ConvertorTypeRuleSetBinary:     &RuleSetBinary{},
+	C.ConvertorTypeAdGuardRuleSet:    &adguard.RuleSet{},
+	C.ConvertorTypeClashRuleProvider: &clash.RuleProvider{},
+	C.ConvertorTypeSurgeRuleSet:      &SurgeRuleSet{},
 }

@@ -31,30 +31,28 @@ type Metadata struct {
 }
 
 func DetectMetadata(userAgent string) Metadata {
-	var metadata Metadata
-	metadata.UserAgent = userAgent
-	if strings.HasPrefix(userAgent, "SFA") {
+	metadata := Metadata{UserAgent: userAgent}
+	switch {
+	case strings.HasPrefix(userAgent, "SFA"):
 		metadata.System = SystemAndroid
-	} else if strings.HasPrefix(userAgent, "SFI") {
+	case strings.HasPrefix(userAgent, "SFI"):
 		metadata.System = SystemiOS
-	} else if strings.HasPrefix(userAgent, "SFM") {
+	case strings.HasPrefix(userAgent, "SFM"):
 		metadata.System = SystemMacOS
-	} else if strings.HasPrefix(userAgent, "SFT") {
+	case strings.HasPrefix(userAgent, "SFT"):
 		metadata.System = SystemAppleTVOS
 	}
-	var versionName string
-	if strings.Contains(userAgent, "sing-box ") {
+	if index := strings.Index(userAgent, "sing-box "); index >= 0 {
 		metadata.Platform = PlatformSingBox
-		versionName = strings.Split(userAgent, "sing-box ")[1]
-		if strings.Contains(versionName, ";") {
-			versionName = strings.Split(versionName, ";")[0]
-		} else {
-			versionName = strings.Split(versionName, ")")[0]
+		versionName := userAgent[index+len("sing-box "):]
+		if cut := strings.IndexAny(versionName, ";)"); cut >= 0 {
+			versionName = versionName[:cut]
 		}
-	}
-	if semver.IsValid(versionName) {
-		version := semver.ParseVersion(versionName)
-		metadata.Version = &version
+		versionName = strings.TrimSpace(versionName)
+		if semver.IsValid(versionName) {
+			version := semver.ParseVersion(versionName)
+			metadata.Version = &version
+		}
 	}
 	return metadata
 }

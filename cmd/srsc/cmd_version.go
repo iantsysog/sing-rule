@@ -1,33 +1,18 @@
 package main
 
 import (
+	"io"
 	"os"
 	"runtime"
 	"runtime/debug"
 
 	C "github.com/sagernet/sing-box/constant"
-
-	"github.com/spf13/cobra"
 )
 
-var commandVersion = &cobra.Command{
-	Use:   "version",
-	Short: "Print current version of srsc",
-	Run:   printVersion,
-	Args:  cobra.NoArgs,
-}
-
-var nameOnly bool
-
-func init() {
-	commandVersion.Flags().BoolVarP(&nameOnly, "name", "n", false, "print version name only")
-	mainCommand.AddCommand(commandVersion)
-}
-
-func printVersion(cmd *cobra.Command, args []string) {
+func printVersion(nameOnly bool) error {
 	if nameOnly {
-		os.Stdout.WriteString(C.Version + "\n")
-		return
+		_, err := io.WriteString(os.Stdout, C.Version+"\n")
+		return err
 	}
 	version := "srsc version " + C.Version + "\n\n"
 	version += "Environment: " + runtime.Version() + " " + runtime.GOOS + "/" + runtime.GOARCH + "\n"
@@ -60,5 +45,6 @@ func printVersion(cmd *cobra.Command, args []string) {
 		version += "CGO: disabled\n"
 	}
 
-	os.Stdout.WriteString(version)
+	_, err := io.WriteString(os.Stdout, version)
+	return err
 }

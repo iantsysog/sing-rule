@@ -1,6 +1,8 @@
 package constant
 
+type CacheType = string
+
 const (
-	CacheTypeMemory = "memory"
-	CacheTypeRedis  = "redis"
+	CacheTypeMemory CacheType = "memory"
+	CacheTypeRedis  CacheType = "redis"
 )

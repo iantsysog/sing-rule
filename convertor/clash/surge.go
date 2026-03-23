@@ -255,28 +255,34 @@ func parseSurgePortRange(portString string) (ranges.Range[uint16], error) {
 			return ranges.Range[uint16]{}, E.Cause(err, "invalid port range: ", portString)
 		}
 		return ranges.New(uint16(portStartValue), uint16(portEndValue)), nil
-	} else if strings.HasPrefix(portString, "<=") {
-		portValue, err := strconv.ParseUint(strings.TrimPrefix(portString, "<="), 10, 16)
+	} else if after, ok := strings.CutPrefix(portString, "<="); ok {
+		portValue, err := strconv.ParseUint(after, 10, 16)
 		if err != nil {
 			return ranges.Range[uint16]{}, E.Cause(err, "invalid port range: ", portString)
 		}
 		return ranges.New(0, uint16(portValue)), nil
-	} else if strings.HasPrefix(portString, "<") {
-		portValue, err := strconv.ParseUint(strings.TrimPrefix(portString, "<"), 10, 16)
+	} else if after, ok := strings.CutPrefix(portString, "<"); ok {
+		portValue, err := strconv.ParseUint(after, 10, 16)
 		if err != nil {
 			return ranges.Range[uint16]{}, E.Cause(err, "invalid port range: ", portString)
 		}
+		if portValue == 0 {
+			return ranges.Range[uint16]{}, E.New("invalid port range: ", portString)
+		}
 		return ranges.New(0, uint16(portValue-1)), nil
-	} else if strings.HasPrefix(portString, ">=") {
-		portValue, err := strconv.ParseUint(strings.TrimPrefix(portString, ">="), 10, 16)
+	} else if after, ok := strings.CutPrefix(portString, ">="); ok {
+		portValue, err := strconv.ParseUint(after, 10, 16)
 		if err != nil {
 			return ranges.Range[uint16]{}, E.Cause(err, "invalid port range: ", portString)
 		}
 		return ranges.New(uint16(portValue), 65535), nil
-	} else if strings.HasPrefix(portString, ">") {
-		portValue, err := strconv.ParseUint(strings.TrimPrefix(portString, ">"), 10, 16)
+	} else if after0, ok0 := strings.CutPrefix(portString, ">"); ok0 {
+		portValue, err := strconv.ParseUint(after0, 10, 16)
 		if err != nil {
 			return ranges.Range[uint16]{}, E.Cause(err, "invalid port range: ", portString)
+		}
+		if portValue >= 65535 {
+			return ranges.Range[uint16]{}, E.New("invalid port range: ", portString)
 		}
 		return ranges.New(uint16(portValue+1), 65535), nil
 	}

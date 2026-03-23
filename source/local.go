@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -19,6 +20,7 @@ type Local struct {
 }
 
 func NewLocal(ctx context.Context, options option.SourceOptions) (*Local, error) {
+	_ = ctx
 	pathTemplate := template.New("local path")
 	pathTemplate.Funcs(template.FuncMap{
 		"toLower": strings.ToLower,
@@ -34,13 +36,16 @@ func NewLocal(ctx context.Context, options option.SourceOptions) (*Local, error)
 }
 
 func (s *Local) Path(urlParams map[string]string) (sourcePath string, err error) {
+	if s == nil || s.pathTemplate == nil {
+		return "", os.ErrInvalid
+	}
 	pathBuffer := buf.New()
 	defer pathBuffer.Release()
 	err = s.pathTemplate.Execute(pathBuffer, urlParams)
 	if err != nil {
 		return
 	}
-	sourcePath = string(pathBuffer.Bytes())
+	sourcePath = filepath.Clean(string(pathBuffer.Bytes()))
 	return
 }
 
@@ -53,12 +58,14 @@ func (s *Local) LastUpdated(path string) time.Time {
 }
 
 func (s *Local) Fetch(path string, requestBody adapter.FetchRequestBody) (body *adapter.FetchResponseBody, err error) {
+	_ = requestBody
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
+	lastUpdated := s.LastUpdated(path)
 	return &adapter.FetchResponseBody{
 		Content:     content,
-		LastUpdated: s.LastUpdated(path),
+		LastUpdated: lastUpdated,
 	}, nil
 }

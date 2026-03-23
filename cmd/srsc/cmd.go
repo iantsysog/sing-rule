@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter/certificate"
 	"github.com/sagernet/sing-box/adapter/endpoint"
@@ -18,8 +22,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/filemanager"
-
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -30,19 +32,67 @@ var (
 	disableColor      bool
 )
 
-var mainCommand = &cobra.Command{
-	Use:              "srsc",
-	PersistentPreRun: preRun,
+type cliArgs struct {
+	ConfigPaths       []string   `short:"c" name:"config" help:"Set configuration file path."`
+	ConfigDirectories []string   `short:"C" name:"config-directory" help:"Set configuration directory path."`
+	WorkingDir        string     `short:"D" name:"directory" help:"Set working directory."`
+	DisableColor      bool       `name:"disable-color" help:"Disable color output."`
+	Run               runCommand `cmd:"" help:"Run service."`
+	Check             checkCmd   `cmd:"" help:"Check configuration."`
+	Format            formatCmd  `cmd:"" help:"Format configuration."`
+	Version           versionCmd `cmd:"" help:"Print current version of srsc."`
 }
 
-func init() {
-	mainCommand.PersistentFlags().StringArrayVarP(&configPaths, "config", "c", nil, "set configuration file path")
-	mainCommand.PersistentFlags().StringArrayVarP(&configDirectories, "config-directory", "C", nil, "set configuration directory path")
-	mainCommand.PersistentFlags().StringVarP(&workingDir, "directory", "D", "", "set working directory")
-	mainCommand.PersistentFlags().BoolVarP(&disableColor, "disable-color", "", false, "disable color output")
+type runCommand struct{}
+
+type checkCmd struct{}
+
+type formatCmd struct {
+	Write bool `short:"w" name:"write" help:"Write result to source file instead of stdout."`
 }
 
-func preRun(cmd *cobra.Command, args []string) {
+type versionCmd struct {
+	NameOnly bool `short:"n" name:"name" help:"Print version name only."`
+}
+
+func (c *runCommand) Run() error {
+	return run()
+}
+
+func (c *checkCmd) Run() error {
+	return check()
+}
+
+func (c *formatCmd) Run() error {
+	commandFormatFlagWrite = c.Write
+	return format()
+}
+
+func (c *versionCmd) Run() error {
+	return printVersion(c.NameOnly)
+}
+
+func executeMain() error {
+	args := &cliArgs{}
+	parser, err := kong.New(args, kong.Name("srsc"))
+	if err != nil {
+		return err
+	}
+	ctx, err := parser.Parse(os.Args[1:])
+	if err != nil {
+		return err
+	}
+	configPaths = normalizePathList(args.ConfigPaths)
+	configDirectories = normalizePathList(args.ConfigDirectories)
+	workingDir = strings.TrimSpace(args.WorkingDir)
+	disableColor = args.DisableColor
+	if err := preRun(); err != nil {
+		return err
+	}
+	return ctx.Run()
+}
+
+func preRun() error {
 	globalCtx = context.Background()
 	sudoUser := os.Getenv("SUDO_USER")
 	sudoUID, _ := strconv.Atoi(os.Getenv("SUDO_UID"))
@@ -58,21 +108,47 @@ func preRun(cmd *cobra.Command, args []string) {
 		globalCtx = filemanager.WithDefault(globalCtx, "", "", sudoUID, sudoGID)
 	}
 	if disableColor {
-		log.SetStdLogger(log.NewDefaultFactory(context.Background(), log.Formatter{BaseTime: time.Now(), DisableColors: true}, os.Stderr, "", nil, false).Logger())
+		log.SetStdLogger(log.NewDefaultFactory(globalCtx, log.Formatter{BaseTime: time.Now(), DisableColors: true}, os.Stderr, "", nil, false).Logger())
 	}
 	if workingDir != "" {
-		_, err := os.Stat(workingDir)
+		absPath, err := filepath.Abs(workingDir)
 		if err != nil {
-			filemanager.MkdirAll(globalCtx, workingDir, 0o777)
+			return err
 		}
-		err = os.Chdir(workingDir)
-		if err != nil {
-			log.Fatal(err)
+		info, err := os.Stat(absPath)
+		switch {
+		case err == nil && !info.IsDir():
+			return errors.New("working directory path is not a directory: " + absPath)
+		case errors.Is(err, os.ErrNotExist):
+			if err := filemanager.MkdirAll(globalCtx, absPath, 0o777); err != nil {
+				return err
+			}
+		case err != nil:
+			return err
+		}
+		if err := os.Chdir(absPath); err != nil {
+			return err
 		}
 	}
 	if len(configPaths) == 0 && len(configDirectories) == 0 {
-		configPaths = append(configPaths, "config.json")
+		configPaths = []string{"config.json"}
 	}
 	globalCtx = service.ContextWith(globalCtx, deprecated.NewStderrManager(log.StdLogger()))
 	globalCtx = box.Context(globalCtx, inbound.NewRegistry(), outbound.NewRegistry(), endpoint.NewRegistry(), dns.NewTransportRegistry(), boxService.NewRegistry(), certificate.NewRegistry())
+	return nil
+}
+
+func normalizePathList(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	normalized := make([]string, 0, len(paths))
+	for _, path := range paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
 }

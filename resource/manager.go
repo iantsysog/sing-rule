@@ -18,6 +18,8 @@ import (
 
 var _ adapter.ResourceManager = (*Manager)(nil)
 
+var binaryConvertor = convertor.Convertors[C.ConvertorTypeRuleSetBinary]
+
 type Manager struct {
 	ctx     context.Context
 	logger  logger.ContextLogger
@@ -54,6 +56,9 @@ func NewManager(ctx context.Context, logger logger.ContextLogger, options option
 		ctx:    ctx,
 		logger: logger,
 		cache:  service.FromContext[adapter.Cache](ctx),
+	}
+	if m.cache == nil {
+		return nil, E.New("cache service is not configured")
 	}
 	if options.GEOIP != nil {
 		geoip, err := NewResource(ctx, options.GEOIP)
@@ -131,6 +136,9 @@ func (m *Manager) IPASN(asn string) (*boxOption.DefaultHeadlessRule, error) {
 }
 
 func (m *Manager) fetch(r *Resource, cachePath string, cacheKey string) (*boxOption.DefaultHeadlessRule, error) {
+	if r == nil {
+		return nil, E.New("resource is not configured")
+	}
 	cachedBinary, err := m.cache.LoadBinary(cacheKey)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, E.Cause(err, "load cache binary")
@@ -148,6 +156,9 @@ func (m *Manager) fetch(r *Resource, cachePath string, cacheKey string) (*boxOpt
 	if err != nil {
 		return nil, E.Cause(err, "fetch source")
 	}
+	if response == nil {
+		return nil, E.New("fetch source: empty response")
+	}
 	if response.NotModified {
 		if cachedBinary == nil {
 			return nil, E.New("fetch source: unexpected not modified response")
@@ -162,7 +173,7 @@ func (m *Manager) fetch(r *Resource, cachePath string, cacheKey string) (*boxOpt
 		return m.loadCache(cachedBinary)
 	}
 	if len(response.Content) == 0 {
-		return nil, E.Cause(err, "fetch source: empty content")
+		return nil, E.New("fetch source: empty content")
 	}
 	var rules []adapter.Rule
 	rules, err = r.From(m.ctx, response.Content, adapter.ConvertOptions{
@@ -173,18 +184,14 @@ func (m *Manager) fetch(r *Resource, cachePath string, cacheKey string) (*boxOpt
 	if err != nil {
 		return nil, E.Cause(err, "decode source")
 	}
-	if len(rules) != 1 {
-		return nil, E.New("unexpected resource rule count: ", len(rules))
-	} else if rules[0].Type != boxConstant.RuleTypeDefault {
-		return nil, E.New("unexpected complex resource: logical rule")
-	} else if !rules[0].Headlessable() {
-		return nil, E.New("unexpected complex resource: unsupported by sing-box")
+	if err = validateResourceRules(rules); err != nil {
+		return nil, err
 	}
-	binary, err := convertor.Convertors[C.ConvertorTypeRuleSetBinary].To(m.ctx, rules, adapter.ConvertOptions{
+	binary, err := binaryConvertor.To(m.ctx, rules, adapter.ConvertOptions{
 		Options: option.ConvertOptions{TargetConvertOptions: option.TargetConvertOptions{TargetType: C.ConvertorTypeRuleSetBinary}},
 	})
 	if err != nil {
-		return nil, E.Cause(err, "encode JSON")
+		return nil, E.Cause(err, "encode binary")
 	}
 	cachedBinary = &adapter.SavedBinary{
 		Content:     binary,
@@ -199,14 +206,31 @@ func (m *Manager) fetch(r *Resource, cachePath string, cacheKey string) (*boxOpt
 }
 
 func (m *Manager) loadCache(cachedBinary *adapter.SavedBinary) (*boxOption.DefaultHeadlessRule, error) {
-	rules, err := convertor.Convertors[C.ConvertorTypeRuleSetBinary].From(m.ctx, cachedBinary.Content, adapter.ConvertOptions{
+	if cachedBinary == nil || len(cachedBinary.Content) == 0 {
+		return nil, E.New("resource cache is empty")
+	}
+	rules, err := binaryConvertor.From(m.ctx, cachedBinary.Content, adapter.ConvertOptions{
 		Options: option.ConvertOptions{SourceConvertOptions: option.SourceConvertOptions{SourceType: C.ConvertorTypeRuleSetBinary}},
 	})
 	if err != nil {
 		return nil, err
 	}
-	if len(rules) != 1 || rules[0].Type != boxConstant.RuleTypeDefault || !rules[0].Headlessable() {
-		return nil, E.New("unexpected complex resource")
+	if err = validateResourceRules(rules); err != nil {
+		return nil, E.Cause(err, "decode cached resource")
 	}
 	return &rules[0].DefaultOptions.DefaultHeadlessRule, nil
+}
+
+func validateResourceRules(rules []adapter.Rule) error {
+	if len(rules) != 1 {
+		return E.New("unexpected resource rule count: ", len(rules))
+	}
+	rule := rules[0]
+	if rule.Type != boxConstant.RuleTypeDefault {
+		return E.New("unexpected complex resource: logical rule")
+	}
+	if !rule.Headlessable() {
+		return E.New("unexpected complex resource: unsupported by sing-box")
+	}
+	return nil
 }

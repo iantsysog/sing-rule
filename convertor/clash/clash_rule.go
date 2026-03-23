@@ -1,7 +1,7 @@
 package clash
 
 import (
-	"regexp"
+	"container/list"
 	"strconv"
 	"strings"
 
@@ -14,8 +14,7 @@ import (
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ranges"
 
-	"github.com/bahlo/generic-list-go"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 func toClassicalLine(rule adapter.Rule) ([]string, error) {
@@ -30,9 +29,9 @@ func toClassicalLine(rule adapter.Rule) ([]string, error) {
 		}
 		if rule.LogicalOptions.Mode == C.LogicalTypeAnd {
 			if rule.LogicalOptions.Invert {
-				return []string{"NOT,(" + strings.Join(subRules, ","), ")"}, nil
+				return []string{"NOT,(" + strings.Join(subRules, ",") + ")"}, nil
 			} else {
-				return []string{"AND,(" + strings.Join(subRules, ","), ")"}, nil
+				return []string{"AND,(" + strings.Join(subRules, ",") + ")"}, nil
 			}
 		} else {
 			if rule.LogicalOptions.Invert {
@@ -181,11 +180,11 @@ func fromClassicalLine(ruleLine string) (*adapter.Rule, error) {
 		rule.SourceIPCIDR = append(rule.SourceIPCIDR, payload)
 	case "SRC-PORT":
 		portRanges, err := utils.NewUnsignedRanges[uint16](payload)
-		if err == nil {
+		if err != nil {
 			return nil, err
 		}
 		for _, portRange := range portRanges {
-			if portRanges[0].Start() == portRanges[0].End() {
+			if portRange.Start() == portRange.End() {
 				rule.SourcePort = append(rule.SourcePort, portRange.Start())
 			} else {
 				rule.SourcePortRange = append(rule.SourcePortRange, F.ToString(portRange.Start(), ":", portRange.End()))
@@ -193,18 +192,18 @@ func fromClassicalLine(ruleLine string) (*adapter.Rule, error) {
 		}
 	case "DST-PORT":
 		portRanges, err := utils.NewUnsignedRanges[uint16](payload)
-		if err == nil {
+		if err != nil {
 			return nil, err
 		}
 		for _, portRange := range portRanges {
-			if portRanges[0].Start() == portRanges[0].End() {
+			if portRange.Start() == portRange.End() {
 				rule.Port = append(rule.Port, portRange.Start())
 			} else {
 				rule.PortRange = append(rule.PortRange, F.ToString(portRange.Start(), ":", portRange.End()))
 			}
 		}
 	case "PROCESS-NAME":
-		// TODO: maybe android package name here
+		// May map to Android package names depending on upstream format.
 		rule.ProcessName = append(rule.ProcessName, payload)
 	case "PROCESS-PATH":
 		rule.ProcessPath = append(rule.ProcessPath, payload)
@@ -235,7 +234,7 @@ func fromClassicalLine(ruleLine string) (*adapter.Rule, error) {
 		rule.InboundType = append(rule.InboundType, payload)
 	case "IN-PORT":
 		portRanges, err := utils.NewUnsignedRanges[uint16](payload)
-		if err == nil {
+		if err != nil {
 			return nil, err
 		}
 		for _, portRange := range portRanges {
@@ -271,11 +270,7 @@ func parseRule(ruleRaw string) (string, string, []string) {
 }
 
 func parseLogicLine(name string, payload string, parser func(ruleLine string) (*adapter.Rule, error)) (*adapter.Rule, error) {
-	regex, err := regexp.Compile("\\(.*\\)")
-	if err != nil {
-		return nil, err
-	}
-	if !regex.MatchString(payload) {
+	if !strings.HasPrefix(payload, "(") || !strings.HasSuffix(payload, ")") {
 		return nil, E.New("payload format error")
 	}
 	subAllRanges, err := logicFormat(payload)
@@ -319,11 +314,12 @@ func (r Range) containRange(preStart, preEnd int) bool {
 }
 
 func logicFormat(payload string) ([]Range, error) {
-	stack := list.New[Range]()
+	stack := list.New()
 	num := 0
 	subRanges := make([]Range, 0)
 	for i, c := range payload {
-		if c == '(' {
+		switch c {
+		case '(':
 			sr := Range{
 				start: i,
 				index: num,
@@ -331,15 +327,16 @@ func logicFormat(payload string) ([]Range, error) {
 
 			num++
 			stack.PushBack(sr)
-		} else if c == ')' {
+		case ')':
 			if stack.Len() == 0 {
 				return nil, E.New("missing '('")
 			}
 
-			sr := stack.Back()
-			stack.Remove(sr)
-			sr.Value.end = i
-			subRanges = append(subRanges, sr.Value)
+			element := stack.Back()
+			stack.Remove(element)
+			sr := element.Value.(Range)
+			sr.end = i
+			subRanges = append(subRanges, sr)
 		}
 	}
 	if stack.Len() != 0 {

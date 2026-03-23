@@ -1,6 +1,7 @@
 package option
 
 import (
+	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
 )
@@ -21,6 +22,9 @@ func (e Resource) MarshalJSON() ([]byte, error) {
 }
 
 func (e *Resource) UnmarshalJSON(bytes []byte) error {
+	if e == nil {
+		return E.New("nil resource")
+	}
 	err := json.Unmarshal(bytes, &e.SourceOptions)
 	if err != nil {
 		return err

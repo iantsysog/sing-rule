@@ -2,41 +2,24 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/sagernet/sing-box/log"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
-
-	"github.com/spf13/cobra"
 )
 
 var commandFormatFlagWrite bool
-
-var commandFormat = &cobra.Command{
-	Use:   "format",
-	Short: "Format configuration",
-	Run: func(cmd *cobra.Command, args []string) {
-		err := format()
-		if err != nil {
-			log.Fatal(err)
-		}
-	},
-	Args: cobra.NoArgs,
-}
-
-func init() {
-	commandFormat.Flags().BoolVarP(&commandFormatFlagWrite, "write", "w", false, "write result to (source) file instead of stdout")
-	mainCommand.AddCommand(commandFormat)
-}
 
 func format() error {
 	optionsList, err := readConfig()
 	if err != nil {
 		return err
 	}
+	stdout := os.Stdout
+	stderr := os.Stderr
 	for _, optionsEntry := range optionsList {
 		optionsEntry.options, err = badjson.Omitempty(globalCtx, optionsEntry.options)
 		if err != nil {
@@ -52,24 +35,42 @@ func format() error {
 		outputPath, _ := filepath.Abs(optionsEntry.path)
 		if !commandFormatFlagWrite {
 			if len(optionsList) > 1 {
-				os.Stdout.WriteString(outputPath + "\n")
+				if _, err = io.WriteString(stdout, outputPath+"\n"); err != nil {
+					return E.Cause(err, "write output path")
+				}
 			}
-			os.Stdout.WriteString(buffer.String() + "\n")
+			if _, err = stdout.Write(buffer.Bytes()); err != nil {
+				return E.Cause(err, "write output")
+			}
 			continue
 		}
 		if bytes.Equal(optionsEntry.content, buffer.Bytes()) {
 			continue
 		}
-		output, err := os.Create(optionsEntry.path)
-		if err != nil {
-			return E.Cause(err, "open output")
-		}
-		_, err = output.Write(buffer.Bytes())
-		output.Close()
-		if err != nil {
+		if err = writeFileAtomic(optionsEntry.path, buffer.Bytes()); err != nil {
 			return E.Cause(err, "write output")
 		}
-		os.Stderr.WriteString(outputPath + "\n")
+		if _, err = io.WriteString(stderr, outputPath+"\n"); err != nil {
+			return E.Cause(err, "write output path")
+		}
 	}
 	return nil
+}
+
+func writeFileAtomic(path string, content []byte) error {
+	dir := filepath.Dir(path)
+	file, err := os.CreateTemp(dir, ".srsc-format-*")
+	if err != nil {
+		return err
+	}
+	tempPath := file.Name()
+	defer os.Remove(tempPath)
+	if _, err = file.Write(content); err != nil {
+		file.Close()
+		return err
+	}
+	if err = file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tempPath, path)
 }

@@ -32,6 +32,7 @@ type adguardRuleLine struct {
 
 func ToRules(reader io.Reader, acceptExtendedRules bool, logger logger.Logger) ([]adapter.Rule, error) {
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var (
 		ruleLines    []adguardRuleLine
 		ignoredLines int
@@ -65,9 +66,7 @@ parseLine:
 			}
 			continue
 		}
-		if strings.HasSuffix(ruleLine, "|") {
-			ruleLine = ruleLine[:len(ruleLine)-1]
-		}
+		ruleLine = strings.TrimSuffix(ruleLine, "|")
 		var (
 			isExclude   bool
 			isSuffix    bool
@@ -84,9 +83,9 @@ parseLine:
 				if len(paramParts) > 0 && len(paramParts) <= 2 {
 					switch paramParts[0] {
 					case "app", "network":
-						// maybe support by package_name/process_name
+						// Could be mapped to package_name/process_name.
 					case "dnstype":
-						// maybe support by query_type
+						// Could be mapped to query_type.
 					case "important":
 						ignored = true
 						isImportant = true
@@ -108,9 +107,7 @@ parseLine:
 			ruleLine = ruleLine[2:]
 			isExclude = true
 		}
-		if strings.HasSuffix(ruleLine, "|") {
-			ruleLine = ruleLine[:len(ruleLine)-1]
-		}
+		ruleLine = strings.TrimSuffix(ruleLine, "|")
 		if strings.HasPrefix(ruleLine, "||") {
 			ruleLine = ruleLine[2:]
 			isSuffix = true
@@ -196,6 +193,9 @@ parseLine:
 			isRegexp:       isRegexp,
 			isImportant:    isImportant,
 		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, E.Cause(err, "scan AdGuard rule-set")
 	}
 	if len(ruleLines) == 0 {
 		return nil, E.New("AdGuard rule-set is empty or all rules are unsupported")
@@ -458,7 +458,7 @@ parse:
 	for {
 		switch rule.Type {
 		case C.RuleTypeLogical:
-			if !(len(rule.LogicalOptions.Rules) == 2 && rule.LogicalOptions.Rules[0].Type == C.RuleTypeDefault && adapter.IsDestinationAddressRule(rule.LogicalOptions.Rules[0].DefaultOptions)) {
+			if !(len(rule.LogicalOptions.Rules) == 2 && rule.LogicalOptions.Rules[0].Type == C.RuleTypeDefault && isAdGuardDestinationRule(rule.LogicalOptions.Rules[0].DefaultOptions)) {
 				return
 			}
 			if rule.LogicalOptions.Mode == C.LogicalTypeAnd && rule.LogicalOptions.Rules[0].DefaultOptions.Invert {
@@ -483,7 +483,7 @@ parse:
 			}
 			rule = rule.LogicalOptions.Rules[1]
 		case C.RuleTypeDefault:
-			if !adapter.IsDestinationAddressRule(rule.DefaultOptions) {
+			if !isAdGuardDestinationRule(rule.DefaultOptions) {
 				return
 			}
 			domainAdGuard = rule.DefaultOptions.AdGuardDomain
@@ -573,6 +573,15 @@ parse:
 	}
 }
 
+func isAdGuardDestinationRule(rule adapter.DefaultRule) bool {
+	rule.Invert = false
+	if len(rule.AdGuardDomain) > 0 || rule.AdGuardDomainMatcher != nil {
+		rule.AdGuardDomain = nil
+		rule.AdGuardDomainMatcher = nil
+	}
+	return adapter.IsDestinationAddressRule(rule)
+}
+
 func ignoreIPCIDRRegexp(ruleLine string) bool {
 	if strings.HasPrefix(ruleLine, "(http?:\\/\\/)") {
 		ruleLine = ruleLine[12:]
@@ -586,18 +595,18 @@ func ignoreIPCIDRRegexp(ruleLine string) bool {
 }
 
 func parseAdGuardHostLine(ruleLine string) (string, error) {
-	idx := strings.Index(ruleLine, " ")
-	if idx == -1 {
+	fields := strings.Fields(ruleLine)
+	if len(fields) < 2 {
 		return "", os.ErrInvalid
 	}
-	address, err := netip.ParseAddr(ruleLine[:idx])
+	address, err := netip.ParseAddr(fields[0])
 	if err != nil {
 		return "", err
 	}
 	if !address.IsUnspecified() {
 		return "", nil
 	}
-	domain := ruleLine[idx+1:]
+	domain := fields[1]
 	if !M.IsDomainName(domain) {
 		return "", E.New("invalid domain name: ", domain)
 	}

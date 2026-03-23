@@ -19,66 +19,85 @@ type Version struct {
 }
 
 func (v Version) LessThan(anotherVersion Version) bool {
-	return !v.GreaterThanOrEqual(anotherVersion)
+	return v.Compare(anotherVersion) < 0
 }
 
 func (v Version) LessThanOrEqual(anotherVersion Version) bool {
-	return v == anotherVersion || anotherVersion.GreaterThan(v)
+	return v.Compare(anotherVersion) <= 0
 }
 
 func (v Version) GreaterThanOrEqual(anotherVersion Version) bool {
-	return v == anotherVersion || v.GreaterThan(anotherVersion)
+	return v.Compare(anotherVersion) >= 0
 }
 
 func (v Version) GreaterThan(anotherVersion Version) bool {
-	if v.Major > anotherVersion.Major {
-		return true
-	} else if v.Major < anotherVersion.Major {
-		return false
-	}
-	if v.Minor > anotherVersion.Minor {
-		return true
-	} else if v.Minor < anotherVersion.Minor {
-		return false
-	}
-	if v.Patch > anotherVersion.Patch {
-		return true
-	} else if v.Patch < anotherVersion.Patch {
-		return false
-	}
-	if v.PreReleaseIdentifier == "" && anotherVersion.PreReleaseIdentifier != "" {
-		return true
-	} else if v.PreReleaseIdentifier != "" && anotherVersion.PreReleaseIdentifier == "" {
-		return false
-	}
-	if v.PreReleaseIdentifier != "" && anotherVersion.PreReleaseIdentifier != "" {
-		if v.PreReleaseIdentifier == anotherVersion.PreReleaseIdentifier {
-			if v.PreReleaseVersion > anotherVersion.PreReleaseVersion {
-				return true
-			} else if v.PreReleaseVersion < anotherVersion.PreReleaseVersion {
-				return false
-			}
+	return v.Compare(anotherVersion) > 0
+}
+
+func (v Version) Compare(another Version) int {
+	if v.Major != another.Major {
+		if v.Major < another.Major {
+			return -1
 		}
-		preReleaseIdentifier := parsePreReleaseIdentifier(v.PreReleaseIdentifier)
-		anotherPreReleaseIdentifier := parsePreReleaseIdentifier(anotherVersion.PreReleaseIdentifier)
-		if preReleaseIdentifier < anotherPreReleaseIdentifier {
-			return true
-		} else if preReleaseIdentifier > anotherPreReleaseIdentifier {
-			return false
-		}
+		return 1
 	}
-	return false
+	if v.Minor != another.Minor {
+		if v.Minor < another.Minor {
+			return -1
+		}
+		return 1
+	}
+	if v.Patch != another.Patch {
+		if v.Patch < another.Patch {
+			return -1
+		}
+		return 1
+	}
+	if v.PreReleaseIdentifier == "" {
+		if another.PreReleaseIdentifier == "" {
+			return 0
+		}
+		return 1
+	}
+	if another.PreReleaseIdentifier == "" {
+		return -1
+	}
+	leftRank := parsePreReleaseIdentifier(v.PreReleaseIdentifier)
+	rightRank := parsePreReleaseIdentifier(another.PreReleaseIdentifier)
+	if leftRank != rightRank {
+		if leftRank < rightRank {
+			return -1
+		}
+		return 1
+	}
+	if !strings.EqualFold(v.PreReleaseIdentifier, another.PreReleaseIdentifier) {
+		identifierCompare := strings.Compare(strings.ToLower(v.PreReleaseIdentifier), strings.ToLower(another.PreReleaseIdentifier))
+		if identifierCompare < 0 {
+			return -1
+		}
+		return 1
+	}
+	if v.PreReleaseVersion < another.PreReleaseVersion {
+		return -1
+	}
+	if v.PreReleaseVersion > another.PreReleaseVersion {
+		return 1
+	}
+	return 0
 }
 
 func parsePreReleaseIdentifier(identifier string) int {
-	if strings.HasPrefix(identifier, "rc") {
+	identifier = strings.ToLower(identifier)
+	switch {
+	case strings.HasPrefix(identifier, "alpha"):
 		return 1
-	} else if strings.HasPrefix(identifier, "beta") {
+	case strings.HasPrefix(identifier, "beta"):
 		return 2
-	} else if strings.HasPrefix(identifier, "alpha") {
+	case strings.HasPrefix(identifier, "rc"):
 		return 3
+	default:
+		return 0
 	}
-	return 0
 }
 
 func (v Version) String() string {
@@ -104,45 +123,84 @@ func (v Version) BadString() string {
 }
 
 func IsValid(versionName string) bool {
+	versionName = strings.TrimSpace(versionName)
+	if versionName == "" {
+		return false
+	}
+	if versionName[0] == 'v' || versionName[0] == 'V' {
+		return semver.IsValid("v" + versionName[1:])
+	}
 	return semver.IsValid("v" + versionName)
 }
 
 func ParseVersion(versionName string) (version Version) {
-	if strings.HasPrefix(versionName, "v") {
+	versionName = strings.TrimSpace(versionName)
+	if versionName == "" {
+		return
+	}
+	if versionName[0] == 'v' || versionName[0] == 'V' {
 		versionName = versionName[1:]
 	}
-	if strings.Contains(versionName, "-") {
-		parts := strings.Split(versionName, "-")
-		versionName = parts[0]
-		identifier := parts[1]
-		if strings.Contains(identifier, ".") {
-			identifierParts := strings.Split(identifier, ".")
-			version.PreReleaseIdentifier = identifierParts[0]
-			if len(identifierParts) >= 2 {
-				version.PreReleaseVersion, _ = strconv.Atoi(identifierParts[1])
-			}
-		} else {
-			if strings.HasPrefix(identifier, "alpha") {
-				version.PreReleaseIdentifier = "alpha"
-				version.PreReleaseVersion, _ = strconv.Atoi(identifier[5:])
-			} else if strings.HasPrefix(identifier, "beta") {
-				version.PreReleaseIdentifier = "beta"
-				version.PreReleaseVersion, _ = strconv.Atoi(identifier[4:])
-			} else {
-				version.Commit = identifier
-			}
-		}
+	mainPart, suffix, hasSuffix := strings.Cut(versionName, "-")
+	version.Major, version.Minor, version.Patch = parseCoreVersion(mainPart)
+	if !hasSuffix || suffix == "" {
+		return
 	}
-	versionElements := strings.Split(versionName, ".")
-	versionLen := len(versionElements)
-	if versionLen >= 1 {
-		version.Major, _ = strconv.Atoi(versionElements[0])
+	if identifier, releaseVersion, ok := parseDottedPreRelease(suffix); ok {
+		version.PreReleaseIdentifier = identifier
+		version.PreReleaseVersion = releaseVersion
+		return
 	}
-	if versionLen >= 2 {
-		version.Minor, _ = strconv.Atoi(versionElements[1])
+	identifier, releaseVersion, ok := parseCompactPreRelease(suffix)
+	if ok {
+		version.PreReleaseIdentifier = identifier
+		version.PreReleaseVersion = releaseVersion
+		return
 	}
-	if versionLen >= 3 {
-		version.Patch, _ = strconv.Atoi(versionElements[2])
-	}
+	version.Commit = suffix
 	return
+}
+
+func parseCoreVersion(versionName string) (int, int, int) {
+	majorPart, rest, hasMinor := strings.Cut(versionName, ".")
+	major := parseNonNegativeInt(majorPart)
+	if !hasMinor {
+		return major, 0, 0
+	}
+	minorPart, patchPart, hasPatch := strings.Cut(rest, ".")
+	minor := parseNonNegativeInt(minorPart)
+	if !hasPatch {
+		return major, minor, 0
+	}
+	return major, minor, parseNonNegativeInt(patchPart)
+}
+
+func parseDottedPreRelease(suffix string) (string, int, bool) {
+	identifier, releaseVersionRaw, ok := strings.Cut(suffix, ".")
+	if !ok || identifier == "" {
+		return "", 0, false
+	}
+	return identifier, parseNonNegativeInt(releaseVersionRaw), true
+}
+
+func parseCompactPreRelease(suffix string) (string, int, bool) {
+	identifier := strings.ToLower(suffix)
+	switch {
+	case strings.HasPrefix(identifier, "alpha"):
+		return "alpha", parseNonNegativeInt(suffix[len("alpha"):]), true
+	case strings.HasPrefix(identifier, "beta"):
+		return "beta", parseNonNegativeInt(suffix[len("beta"):]), true
+	case strings.HasPrefix(identifier, "rc"):
+		return "rc", parseNonNegativeInt(suffix[len("rc"):]), true
+	default:
+		return "", 0, false
+	}
+}
+
+func parseNonNegativeInt(raw string) int {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value
 }

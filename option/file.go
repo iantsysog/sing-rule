@@ -1,6 +1,7 @@
 package option
 
 import (
+	"strings"
 	_ "unsafe"
 
 	C "github.com/iantsysog/sing-rule/constant"
@@ -39,8 +40,9 @@ type _SourceOptions struct {
 type SourceOptions _SourceOptions
 
 func (o SourceOptions) MarshalJSON() ([]byte, error) {
+	source := strings.TrimSpace(o.Source)
 	var v any
-	switch o.Source {
+	switch source {
 	case C.EndpointSourceLocal:
 		v = o.LocalOptions
 	case C.EndpointSourceRemote:
@@ -58,6 +60,7 @@ func (o *SourceOptions) UnmarshalJSON(bytes []byte) error {
 	if err != nil {
 		return err
 	}
+	o.Source = strings.TrimSpace(o.Source)
 	var v any
 	switch o.Source {
 	case C.EndpointSourceLocal:

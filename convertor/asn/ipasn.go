@@ -2,6 +2,7 @@ package asn
 
 import (
 	"context"
+	"slices"
 
 	"github.com/iantsysog/sing-rule/adapter"
 	"github.com/sagernet/sing-box/constant"
@@ -53,8 +54,11 @@ func resolveAndAppend(ctx context.Context, resolver *ASNResolver, source *[]stri
 	if source == nil || destination == nil || len(*source) == 0 {
 		return nil
 	}
+	asns := slices.Clone(*source)
+	slices.Sort(asns)
+	asns = slices.Compact(asns)
 
-	prefixes, err := resolver.ResolveASNs(ctx, *source)
+	prefixes, err := resolver.ResolveASNs(ctx, asns)
 	if err != nil {
 		return err
 	}

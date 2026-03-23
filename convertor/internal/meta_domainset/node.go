@@ -2,7 +2,7 @@ package trie
 
 import "strings"
 
-// Node is the trie's node
+// Node represents a trie node.
 type Node[T any] struct {
 	childMap  map[string]*Node[T]
 	childNode *Node[T] // optimize for only one child
@@ -12,6 +12,9 @@ type Node[T any] struct {
 }
 
 func (n *Node[T]) getChild(s string) *Node[T] {
+	if n == nil {
+		return nil
+	}
 	if n.childMap == nil {
 		if n.childNode != nil && n.childStr == s {
 			return n.childNode
@@ -21,18 +24,17 @@ func (n *Node[T]) getChild(s string) *Node[T] {
 	return n.childMap[s]
 }
 
-func (n *Node[T]) hasChild(s string) bool {
-	return n.getChild(s) != nil
-}
-
 func (n *Node[T]) addChild(s string, child *Node[T]) {
+	if n == nil {
+		return
+	}
 	if n.childMap == nil {
 		if n.childNode == nil {
 			n.childStr = s
 			n.childNode = child
 			return
 		}
-		n.childMap = map[string]*Node[T]{}
+		n.childMap = make(map[string]*Node[T], 2)
 		if n.childNode != nil {
 			n.childMap[n.childStr] = n.childNode
 		}
@@ -44,6 +46,9 @@ func (n *Node[T]) addChild(s string, child *Node[T]) {
 }
 
 func (n *Node[T]) getOrNewChild(s string) *Node[T] {
+	if n == nil {
+		return nil
+	}
 	node := n.getChild(s)
 	if node == nil {
 		node = newNode[T]()
@@ -53,6 +58,9 @@ func (n *Node[T]) getOrNewChild(s string) *Node[T] {
 }
 
 func (n *Node[T]) optimize() {
+	if n == nil {
+		return
+	}
 	if len(n.childStr) > 0 {
 		n.childStr = strClone(n.childStr)
 	}
@@ -117,9 +125,12 @@ func (n *Node[T]) setData(data T) {
 }
 
 func (n *Node[T]) getChildren() map[string]*Node[T] {
+	if n == nil {
+		return nil
+	}
 	if n.childMap == nil {
 		if n.childNode != nil {
-			m := make(map[string]*Node[T])
+			m := make(map[string]*Node[T], 1)
 			m[n.childStr] = n.childNode
 			return m
 		}

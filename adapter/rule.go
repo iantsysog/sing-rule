@@ -22,24 +22,30 @@ func RuleFrom(rule boxOption.HeadlessRule) Rule {
 }
 
 func (r Rule) Headlessable() bool {
-	if r.Type == boxConstant.RuleTypeDefault {
+	switch r.Type {
+	case boxConstant.RuleTypeDefault:
 		return r.DefaultOptions.Headlessable()
-	} else {
+	case boxConstant.RuleTypeLogical:
 		return r.LogicalOptions.Headlessable()
+	default:
+		return false
 	}
 }
 
 func (r Rule) ToHeadless() boxOption.HeadlessRule {
-	if r.Type == boxConstant.RuleTypeDefault {
+	switch r.Type {
+	case boxConstant.RuleTypeDefault:
 		return boxOption.HeadlessRule{
 			Type:           boxConstant.RuleTypeDefault,
 			DefaultOptions: r.DefaultOptions.ToHeadless(),
 		}
-	} else {
+	case boxConstant.RuleTypeLogical:
 		return boxOption.HeadlessRule{
 			Type:           boxConstant.RuleTypeLogical,
 			LogicalOptions: r.LogicalOptions.ToHeadless(),
 		}
+	default:
+		return boxOption.HeadlessRule{}
 	}
 }
 

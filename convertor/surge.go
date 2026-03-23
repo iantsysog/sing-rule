@@ -32,10 +32,16 @@ func (s *SurgeRuleSet) From(ctx context.Context, content []byte, options adapter
 		var rules []adapter.Rule
 		scanner := bufio.NewScanner(bytes.NewReader(content))
 		for scanner.Scan() {
-			rule, _ := clash.FromSurgeLine(scanner.Text())
+			rule, err := clash.FromSurgeLine(scanner.Text())
+			if err != nil {
+				return nil, E.Cause(err, "parse Surge rule")
+			}
 			if rule != nil {
 				rules = append(rules, *rule)
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, E.Cause(err, "scan Surge rules")
 		}
 		return adapter.MergeRules(rules), nil
 	case "domain":
@@ -46,11 +52,14 @@ func (s *SurgeRuleSet) From(ctx context.Context, content []byte, options adapter
 			if ruleLine == "" || strings.HasPrefix(ruleLine, "#") {
 				continue
 			}
-			if strings.HasPrefix(ruleLine, ".") {
-				rule.DomainSuffix = append(rule.DomainSuffix, strings.TrimPrefix(ruleLine, "."))
+			if after, ok := strings.CutPrefix(ruleLine, "."); ok {
+				rule.DomainSuffix = append(rule.DomainSuffix, after)
 			} else {
 				rule.Domain = append(rule.Domain, ruleLine)
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, E.Cause(err, "scan Surge domain rules")
 		}
 		return []adapter.Rule{{Type: boxConstant.RuleTypeDefault, DefaultOptions: rule}}, nil
 	default:

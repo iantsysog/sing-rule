@@ -1,6 +1,6 @@
 # Introduction
 
-srsc uses JSON for configuration files.
+srsc uses JSON configuration files.
 
 ### Structure
 
@@ -20,7 +20,7 @@ srsc uses JSON for configuration files.
 
 #### log
 
-Log configuration, see [Log](https://sing-box.sagernet.org/configuration/log/).
+Log settings. See [Log](https://sing-box.sagernet.org/configuration/log/).
 
 #### listen
 
@@ -36,19 +36,19 @@ Listen port.
 
 #### endpoints
 
-HTTP endpoint configuration, see [Endpoint](./endpoint/).
+HTTP endpoint settings. See [Endpoint](./endpoint/).
 
 #### tls
 
-TLS configuration, see [TLS](https://sing-box.sagernet.org/configuration/shared/tls/#inbound).
+TLS settings. See [TLS](https://sing-box.sagernet.org/configuration/shared/tls/#inbound).
 
 #### cache
 
-Cache configuration, see [Cache](./cache/).
+Cache settings. See [Cache](./cache/).
 
 #### resources
 
-Resource configuration, see [Resources](./resources/).
+Resource settings. See [Resources](./resources/).
 
 ### Check
 

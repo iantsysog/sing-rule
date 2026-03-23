@@ -1,11 +1,11 @@
 # AdGuard
 
-AdGuard DNS Filer.
+AdGuard DNS Filter.
 
-Special rule-set supported by sing-box, covering most of the syntax supported by AdGuard Home.
+A special rule-set format supported by sing-box, covering most syntax supported by AdGuard Home.
 
-Since it contains many other rules that cannot be represented in any other format,
-it can only be converted to and from `bianry`.
+Because it includes rule types that cannot be represented in most other formats,
+it can only be converted to and from `binary`.
 
 ### Source Structure
 
@@ -20,7 +20,7 @@ it can only be converted to and from `bianry`.
 
 ```json
 {
-  "target_type": "adguard"
+  "target_type": "binary"
 }
 ```
 
@@ -28,8 +28,8 @@ it can only be converted to and from `bianry`.
 
 #### accept_extended_rules
 
-If not enabled, only rule items that can be expressed by `domain`, `domain_suffix`, `domain_regex` will be parsed, and other items will be ignored.
+If not enabled, only rule items that can be expressed as `domain`, `domain_suffix`, or `domain_regex` are parsed; other items are ignored.
 
-Otherwise, most rules supported by AdGuard DNS Filter will be supported, but can only be converted to and from sing-box rule-set binary.
+If enabled, most rules supported by AdGuard DNS Filter are parsed, but conversion is limited to sing-box rule-set binary.
 
-For compatibility, see [AdGuard DNS Filter](https://sing-box.sagernet.org/configuration/rule-set/adguard/).
+For compatibility details, see [AdGuard DNS Filter](https://sing-box.sagernet.org/configuration/rule-set/adguard/).

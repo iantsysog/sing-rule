@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"slices"
 	"time"
 
 	"github.com/iantsysog/sing-rule/adapter"
@@ -36,10 +37,25 @@ func (c *MemoryCache) LoadBinary(tag string) (*adapter.SavedBinary, error) {
 	if !loaded {
 		return nil, nil
 	}
-	return savedBinary, nil
+	return cloneSavedBinary(savedBinary), nil
 }
 
 func (c *MemoryCache) SaveBinary(tag string, binary *adapter.SavedBinary) error {
-	c.Add(tag, binary)
+	if binary == nil {
+		c.Remove(tag)
+		return nil
+	}
+	c.Add(tag, cloneSavedBinary(binary))
 	return nil
+}
+
+func cloneSavedBinary(binary *adapter.SavedBinary) *adapter.SavedBinary {
+	if binary == nil {
+		return nil
+	}
+	return &adapter.SavedBinary{
+		Content:     slices.Clone(binary.Content),
+		LastUpdated: binary.LastUpdated,
+		LastEtag:    binary.LastEtag,
+	}
 }

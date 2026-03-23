@@ -3,17 +3,27 @@ package trie
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 )
 
+const domainSetBinaryVersion = 1
+
+var errInvalidDomainSetVersion = errors.New("invalid domain set binary version")
+var errInvalidDomainSetLength = errors.New("invalid domain set binary length")
+
 func (ss *DomainSet) WriteBin(w io.Writer) (err error) {
-	// version
-	_, err = w.Write([]byte{1})
+	if ss == nil {
+		return errors.New("nil domain set")
+	}
+	// Version.
+	_, err = w.Write([]byte{domainSetBinaryVersion})
 	if err != nil {
 		return err
 	}
 
-	// leaves
+	// Leaves.
 	err = binary.Write(w, binary.BigEndian, int64(len(ss.leaves)))
 	if err != nil {
 		return err
@@ -25,7 +35,7 @@ func (ss *DomainSet) WriteBin(w io.Writer) (err error) {
 		}
 	}
 
-	// labelBitmap
+	// Label bitmap.
 	err = binary.Write(w, binary.BigEndian, int64(len(ss.labelBitmap)))
 	if err != nil {
 		return err
@@ -37,7 +47,7 @@ func (ss *DomainSet) WriteBin(w io.Writer) (err error) {
 		}
 	}
 
-	// labels
+	// Labels.
 	err = binary.Write(w, binary.BigEndian, int64(len(ss.labels)))
 	if err != nil {
 		return err
@@ -51,26 +61,29 @@ func (ss *DomainSet) WriteBin(w io.Writer) (err error) {
 }
 
 func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
-	// version
+	// Version.
 	version := make([]byte, 1)
 	_, err = io.ReadFull(r, version)
 	if err != nil {
 		return nil, err
 	}
-	if version[0] != 1 {
-		return nil, errors.New("version is invalid")
+	if version[0] != domainSetBinaryVersion {
+		return nil, errInvalidDomainSetVersion
 	}
 
 	ds = &DomainSet{}
 	var length int64
 
-	// leaves
+	// Leaves.
 	err = binary.Read(r, binary.BigEndian, &length)
 	if err != nil {
 		return nil, err
 	}
-	if length < 1 {
-		return nil, errors.New("length is invalid")
+	if length < 0 || length > math.MaxInt32 {
+		return nil, errInvalidDomainSetLength
+	}
+	if length == 0 {
+		return nil, fmt.Errorf("%w: leaves", errInvalidDomainSetLength)
 	}
 	ds.leaves = make([]uint64, length)
 	for i := int64(0); i < length; i++ {
@@ -80,13 +93,16 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 		}
 	}
 
-	// labelBitmap
+	// Label bitmap.
 	err = binary.Read(r, binary.BigEndian, &length)
 	if err != nil {
 		return nil, err
 	}
-	if length < 1 {
-		return nil, errors.New("length is invalid")
+	if length < 0 || length > math.MaxInt32 {
+		return nil, errInvalidDomainSetLength
+	}
+	if length == 0 {
+		return nil, fmt.Errorf("%w: labelBitmap", errInvalidDomainSetLength)
 	}
 	ds.labelBitmap = make([]uint64, length)
 	for i := int64(0); i < length; i++ {
@@ -96,13 +112,16 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 		}
 	}
 
-	// labels
+	// Labels.
 	err = binary.Read(r, binary.BigEndian, &length)
 	if err != nil {
 		return nil, err
 	}
-	if length < 1 {
-		return nil, errors.New("length is invalid")
+	if length < 0 || length > math.MaxInt32 {
+		return nil, errInvalidDomainSetLength
+	}
+	if length == 0 {
+		return nil, fmt.Errorf("%w: labels", errInvalidDomainSetLength)
 	}
 	ds.labels = make([]byte, length)
 	_, err = io.ReadFull(r, ds.labels)

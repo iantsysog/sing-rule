@@ -5,7 +5,11 @@ package main
 import "github.com/sagernet/sing-box/log"
 
 func main() {
-	if err := mainCommand.Execute(); err != nil {
+	if err := runMain(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func runMain() error {
+	return executeMain()
 }

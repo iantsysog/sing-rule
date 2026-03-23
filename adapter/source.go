@@ -3,7 +3,7 @@ package adapter
 import "time"
 
 type Source interface {
-	Path(urlParams map[string]string) (sourcePath string, err error)
+	Path(urlParams map[string]string) (string, error)
 	LastUpdated(path string) time.Time
 	Fetch(path string, requestBody FetchRequestBody) (*FetchResponseBody, error)
 }

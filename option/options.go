@@ -3,6 +3,7 @@ package option
 import (
 	"bytes"
 	"context"
+	"strings"
 
 	C "github.com/iantsysog/sing-rule/constant"
 	"github.com/sagernet/sing-box/option"
@@ -44,8 +45,9 @@ type _Endpoint struct {
 type Endpoint _Endpoint
 
 func (o Endpoint) MarshalJSON() ([]byte, error) {
+	endpointType := strings.TrimSpace(o.Type)
 	var v any
-	switch o.Type {
+	switch endpointType {
 	case C.EndpointTypeFile:
 		v = o.FileOptions
 	case "":
@@ -61,10 +63,13 @@ func (o *Endpoint) UnmarshalJSON(bytes []byte) error {
 	if err != nil {
 		return err
 	}
+	o.Type = strings.TrimSpace(o.Type)
 	var v any
 	switch o.Type {
 	case C.EndpointTypeFile:
 		v = &o.FileOptions
+	case "":
+		return E.New("missing endpoint type")
 	default:
 		return E.New("unknown endpoint type: " + o.Type)
 	}

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"reflect"
 	"strings"
 
 	"github.com/iantsysog/sing-rule/adapter"
@@ -12,7 +11,7 @@ import (
 	boxConstant "github.com/sagernet/sing-box/constant"
 	E "github.com/sagernet/sing/common/exceptions"
 
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 var _ adapter.Convertor = (*RuleProvider)(nil)
@@ -36,30 +35,19 @@ func (c *RuleProvider) ContentType(options adapter.ConvertOptions) string {
 
 func (c *RuleProvider) From(ctx context.Context, content []byte, options adapter.ConvertOptions) ([]adapter.Rule, error) {
 	format := options.Options.SourceConvertOptions.ClashOptions.SourceFormat
-	var lines []string
+	lines, useTextScanner, err := parseSourceLines(format, content)
+	if err != nil {
+		return nil, err
+	}
 	switch format {
-	case "text":
-	case "yaml":
-		var ruleProvider struct {
-			Payload []string `yaml:"payload"`
-		}
-		err := yaml.Unmarshal(content, &ruleProvider)
-		if err != nil {
-			return nil, err
-		}
-		lines = ruleProvider.Payload
 	case "mrs":
 		return fromMrs(content)
-	case "":
-		return nil, E.New("missing source format in options")
-	default:
-		return nil, E.New("unknown source format: ", format)
 	}
 	behavior := options.Options.SourceConvertOptions.ClashOptions.SourceBehavior
 	switch behavior {
 	case "domain":
 		var rule adapter.DefaultRule
-		if len(lines) > 0 {
+		if !useTextScanner {
 			for _, line := range lines {
 				fromDomainLine(&rule, line)
 			}
@@ -68,11 +56,14 @@ func (c *RuleProvider) From(ctx context.Context, content []byte, options adapter
 			for scanner.Scan() {
 				fromDomainLine(&rule, scanner.Text())
 			}
+			if err := scanner.Err(); err != nil {
+				return nil, E.Cause(err, "scan domain rules")
+			}
 		}
 		return []adapter.Rule{{Type: boxConstant.RuleTypeDefault, DefaultOptions: rule}}, nil
 	case "ipcidr":
 		var rule adapter.DefaultRule
-		if len(lines) > 0 {
+		if !useTextScanner {
 			for _, line := range lines {
 				fromIPCIDRLine(&rule, line)
 			}
@@ -81,13 +72,19 @@ func (c *RuleProvider) From(ctx context.Context, content []byte, options adapter
 			for scanner.Scan() {
 				fromIPCIDRLine(&rule, scanner.Text())
 			}
+			if err := scanner.Err(); err != nil {
+				return nil, E.Cause(err, "scan ipcidr rules")
+			}
 		}
 		return []adapter.Rule{{Type: boxConstant.RuleTypeDefault, DefaultOptions: rule}}, nil
 	case "classical":
 		var rules []adapter.Rule
-		if len(lines) > 0 {
+		if !useTextScanner {
 			for _, line := range lines {
-				rule, _ := fromClassicalLine(line)
+				rule, err := fromClassicalLine(line)
+				if err != nil {
+					return nil, E.Cause(err, "parse classical rule")
+				}
 				if rule != nil {
 					rules = append(rules, *rule)
 				}
@@ -95,10 +92,16 @@ func (c *RuleProvider) From(ctx context.Context, content []byte, options adapter
 		} else {
 			scanner := bufio.NewScanner(bytes.NewReader(content))
 			for scanner.Scan() {
-				rule, _ := fromClassicalLine(scanner.Text())
+				rule, err := fromClassicalLine(scanner.Text())
+				if err != nil {
+					return nil, E.Cause(err, "parse classical rule")
+				}
 				if rule != nil {
 					rules = append(rules, *rule)
 				}
+			}
+			if err := scanner.Err(); err != nil {
+				return nil, E.Cause(err, "scan classical rules")
 			}
 		}
 		return adapter.MergeRules(rules), nil
@@ -127,23 +130,21 @@ func (c *RuleProvider) To(ctx context.Context, contentRules []adapter.Rule, opti
 	case "text":
 		var output bytes.Buffer
 		for _, line := range ruleLines {
-			output.WriteString(line + "\n")
+			output.WriteString(line)
+			output.WriteByte('\n')
 		}
 		return output.Bytes(), nil
 	case "yaml":
-		var output bytes.Buffer
 		ruleProvider := struct {
 			Payload []string `yaml:"payload"`
 		}{
 			Payload: ruleLines,
 		}
-		encoder := yaml.NewEncoder(&output)
-		encoder.SetIndent(2)
-		err = encoder.Encode(ruleProvider)
+		marshaled, err := yaml.Marshal(ruleProvider)
 		if err != nil {
 			return nil, err
 		}
-		return output.Bytes(), nil
+		return marshaled, nil
 	case "":
 		return nil, E.New("missing target format in options")
 	default:
@@ -189,7 +190,7 @@ func toLines(behavior string, rules []adapter.Rule) ([]string, error) {
 				lines = append(lines, domain)
 			}
 			for _, domainSuffix := range rule.DefaultOptions.DomainSuffix {
-				lines = append(lines, domainSuffix)
+				lines = append(lines, "+."+domainSuffix)
 			}
 		}
 		return lines, nil
@@ -205,18 +206,72 @@ func toLines(behavior string, rules []adapter.Rule) ([]string, error) {
 	case "classical":
 		for _, rule := range rules {
 			ruleLines, err := toClassicalLine(rule)
-			if err == nil {
-				continue
+			if err != nil {
+				return nil, err
 			}
 			lines = append(lines, ruleLines...)
 		}
+		return lines, nil
 	}
-	return lines, nil
+	return nil, E.New("unknown target behavior: ", behavior)
+}
+
+func parseSourceLines(format string, content []byte) ([]string, bool, error) {
+	switch format {
+	case "text":
+		return nil, true, nil
+	case "yaml":
+		var ruleProvider struct {
+			Payload []string `yaml:"payload"`
+		}
+		if err := yaml.Unmarshal(content, &ruleProvider); err != nil {
+			return nil, false, err
+		}
+		return ruleProvider.Payload, false, nil
+	case "mrs":
+		return nil, false, nil
+	case "":
+		return nil, false, E.New("missing source format in options")
+	default:
+		return nil, false, E.New("unknown source format: ", format)
+	}
 }
 
 func IsSimpleDomainRule(rule adapter.DefaultRule) bool {
-	var defaultRule adapter.DefaultRule
-	defaultRule.Domain = rule.Domain
-	defaultRule.DomainSuffix = rule.DomainSuffix
-	return reflect.DeepEqual(rule, defaultRule)
+	return len(rule.DomainKeyword) == 0 &&
+		len(rule.DomainRegex) == 0 &&
+		len(rule.SourceIPCIDR) == 0 &&
+		len(rule.IPCIDR) == 0 &&
+		len(rule.SourcePort) == 0 &&
+		len(rule.SourcePortRange) == 0 &&
+		len(rule.Port) == 0 &&
+		len(rule.PortRange) == 0 &&
+		len(rule.ProcessName) == 0 &&
+		len(rule.ProcessPath) == 0 &&
+		len(rule.ProcessPathRegex) == 0 &&
+		len(rule.PackageName) == 0 &&
+		len(rule.Network) == 0 &&
+		len(rule.QueryType) == 0 &&
+		len(rule.NetworkType) == 0 &&
+		!rule.NetworkIsExpensive &&
+		!rule.NetworkIsConstrained &&
+		len(rule.WIFISSID) == 0 &&
+		len(rule.WIFIBSSID) == 0 &&
+		len(rule.GEOIP) == 0 &&
+		len(rule.SourceGEOIP) == 0 &&
+		len(rule.IPASN) == 0 &&
+		len(rule.SourceIPASN) == 0 &&
+		len(rule.GEOSite) == 0 &&
+		len(rule.Inbound) == 0 &&
+		len(rule.InboundType) == 0 &&
+		len(rule.InboundPort) == 0 &&
+		len(rule.InboundUser) == 0 &&
+		!rule.Invert &&
+		len(rule.AdGuardDomain) == 0 &&
+		rule.AdGuardDomainMatcher == nil &&
+		rule.DomainMatcher == nil &&
+		rule.SourceIPSet == nil &&
+		rule.IPSet == nil &&
+		rule.NetworkInterfaceAddress == nil &&
+		len(rule.DefaultInterfaceAddress) == 0
 }

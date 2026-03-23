@@ -3,6 +3,7 @@ package srsc
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -49,12 +50,14 @@ type Options struct {
 func NewServer(options Options) (*Server, error) {
 	createdAt := time.Now()
 	ctx := options.Context
+	var logFactory log.Factory
+	var err error
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	ctx = service.ContextWithDefaultRegistry(ctx)
 	if options.Logger == nil {
-		logFactory, err := log.New(log.Options{
+		logFactory, err = log.New(log.Options{
 			Context:  ctx,
 			Options:  common.PtrValueOrDefault(options.Log),
 			BaseTime: createdAt,
@@ -63,23 +66,23 @@ func NewServer(options Options) (*Server, error) {
 			return nil, E.Cause(err, "create log factory")
 		}
 		options.Logger = logFactory.Logger()
-		// TODO: improve log
 	}
 	serviceCache, err := cache.New(ctx, common.PtrValueOrDefault(options.Cache))
 	if err != nil {
 		return nil, E.Cause(err, "create cache")
 	}
-	service.MustRegister[adapter.Cache](ctx, serviceCache)
+	service.MustRegister(ctx, serviceCache)
 	resourceManage, err := resource.NewManager(ctx, options.Logger, common.PtrValueOrDefault(options.Resources))
 	if err != nil {
 		return nil, E.Cause(err, "create resource manager")
 	}
 	service.MustRegister[adapter.ResourceManager](ctx, resourceManage)
-	chiRouter := chi.NewRouter()
+	router := chi.NewRouter()
 	s := &Server{
-		createdAt: createdAt,
-		ctx:       ctx,
-		logger:    options.Logger,
+		createdAt:  createdAt,
+		ctx:        ctx,
+		logger:     options.Logger,
+		logFactory: logFactory,
 		listener: listener.New(listener.Options{
 			Context: ctx,
 			Logger:  options.Logger,
@@ -89,9 +92,6 @@ func NewServer(options Options) (*Server, error) {
 				ListenPort: options.ListenPort,
 			},
 		}),
-		httpServer: &http.Server{
-			Handler: chiRouter,
-		},
 		cache: serviceCache,
 	}
 	if options.Endpoints == nil || options.Endpoints.Size() == 0 {
@@ -107,10 +107,15 @@ func NewServer(options Options) (*Server, error) {
 			if err != nil {
 				return nil, err
 			}
-			chiRouter.Get(entry.Key, handler.ServeHTTP)
+			router.Get(entry.Key, handler.ServeHTTP)
 		default:
 			return nil, E.New("unknown endpoint type: " + entry.Value.Type)
 		}
+	}
+	s.httpServer = &http.Server{
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 	if options.TLS != nil {
 		tlsConfig, err := tls.NewServer(ctx, options.Logger, common.PtrValueOrDefault(options.TLS))
@@ -123,6 +128,11 @@ func NewServer(options Options) (*Server, error) {
 }
 
 func (s *Server) Start() error {
+	if s.logFactory != nil {
+		if err := s.logFactory.Start(); err != nil {
+			return E.Cause(err, "start log factory")
+		}
+	}
 	if s.cache != nil {
 		err := s.cache.Start()
 		if err != nil {
@@ -135,6 +145,9 @@ func (s *Server) Start() error {
 			return E.Cause(err, "create TLS config")
 		}
 	}
+	if s.listener == nil || s.httpServer == nil {
+		return E.New("server is not initialized")
+	}
 	tcpListener, err := s.listener.ListenTCP()
 	if err != nil {
 		return err
@@ -146,9 +159,9 @@ func (s *Server) Start() error {
 		tcpListener = aTLS.NewListener(tcpListener, s.tlsConfig)
 	}
 	go func() {
-		err = s.httpServer.Serve(tcpListener)
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.Error("serve error: ", err)
+		serveErr := s.httpServer.Serve(tcpListener)
+		if serveErr != nil && !errors.Is(serveErr, net.ErrClosed) {
+			s.logger.Error("serve error: ", serveErr)
 		}
 	}()
 	s.logger.Info("srsc started (", F.Seconds(time.Since(s.createdAt).Seconds()), "s)")
@@ -156,10 +169,16 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Close() error {
-	return common.Close(
-		common.PtrOrNil(s.httpServer),
+	var serverErr error
+	if s.httpServer != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		serverErr = s.httpServer.Shutdown(shutdownCtx)
+		cancel()
+	}
+	return errors.Join(serverErr, common.Close(
 		common.PtrOrNil(s.listener),
 		s.tlsConfig,
 		s.cache,
-	)
+		s.logFactory,
+	))
 }

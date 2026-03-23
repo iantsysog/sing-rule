@@ -20,6 +20,9 @@ type ResourceManager interface {
 
 func EmbedResourceRules(ctx context.Context, rules []Rule) ([]Rule, error) {
 	resourceManager := service.FromContext[ResourceManager](ctx)
+	if resourceManager == nil {
+		return rules, nil
+	}
 	for index, rule := range rules {
 		err := embedResourceRule(ctx, resourceManager, &rule)
 		if err != nil {
@@ -45,7 +48,7 @@ func embedResourceRule(ctx context.Context, resourceManager ResourceManager, rul
 		for _, geoip := range rule.DefaultOptions.GEOIP {
 			geoipRule, err := resourceManager.GEOIP(geoip)
 			if err != nil {
-				return E.Cause(err, "fetch GEOIP resource: ", rule.DefaultOptions.GEOIP)
+				return E.Cause(err, "fetch GEOIP resource: ", geoip)
 			}
 			/*newHeadlessRule, err := badjson.Merge(ctx, rule.DefaultOptions.DefaultHeadlessRule, *geoipRule, false)
 			if err != nil {
@@ -61,7 +64,7 @@ func embedResourceRule(ctx context.Context, resourceManager ResourceManager, rul
 		for _, sourceGeoip := range rule.DefaultOptions.SourceGEOIP {
 			sourceGeoipRule, err := resourceManager.GEOIP(sourceGeoip)
 			if err != nil {
-				return E.Cause(err, "fetch GEOIP resource: ", rule.DefaultOptions.SourceGEOIP)
+				return E.Cause(err, "fetch GEOIP resource: ", sourceGeoip)
 			}
 			if len(sourceGeoipRule.IPCIDR) > 0 {
 				rule.DefaultOptions.SourceIPCIDR = append(rule.DefaultOptions.SourceIPCIDR, sourceGeoipRule.IPCIDR...)
@@ -75,7 +78,7 @@ func embedResourceRule(ctx context.Context, resourceManager ResourceManager, rul
 		for _, geosite := range rule.DefaultOptions.GEOSite {
 			geositeRule, err := resourceManager.GEOSite(geosite)
 			if err != nil {
-				return E.Cause(err, "fetch GEOSite resource: ", rule.DefaultOptions.GEOSite)
+				return E.Cause(err, "fetch GEOSite resource: ", geosite)
 			}
 			if len(geositeRule.Domain) > 0 {
 				rule.DefaultOptions.Domain = append(rule.DefaultOptions.Domain, geositeRule.Domain...)
@@ -96,7 +99,7 @@ func embedResourceRule(ctx context.Context, resourceManager ResourceManager, rul
 		for _, ipasn := range rule.DefaultOptions.IPASN {
 			ipasnRule, err := resourceManager.IPASN(ipasn)
 			if err != nil {
-				return E.Cause(err, "fetch IPASN resource: ", rule.DefaultOptions.IPASN)
+				return E.Cause(err, "fetch IPASN resource: ", ipasn)
 			}
 			if len(ipasnRule.IPCIDR) > 0 {
 				rule.DefaultOptions.IPCIDR = append(rule.DefaultOptions.IPCIDR, ipasnRule.IPCIDR...)
@@ -108,7 +111,7 @@ func embedResourceRule(ctx context.Context, resourceManager ResourceManager, rul
 		for _, sourceIPASN := range rule.DefaultOptions.SourceIPASN {
 			sourceIPASNRule, err := resourceManager.IPASN(sourceIPASN)
 			if err != nil {
-				return E.Cause(err, "fetch IPASN resource: ", rule.DefaultOptions.SourceIPASN)
+				return E.Cause(err, "fetch IPASN resource: ", sourceIPASN)
 			}
 			if len(sourceIPASNRule.IPCIDR) > 0 {
 				rule.DefaultOptions.SourceIPCIDR = append(rule.DefaultOptions.SourceIPCIDR, sourceIPASNRule.IPCIDR...)

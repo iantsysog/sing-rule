@@ -14,6 +14,6 @@ sing-box rule-set source.
 
 ```json
 {
-  "target_type": "target"
+  "target_type": "source"
 }
 ```

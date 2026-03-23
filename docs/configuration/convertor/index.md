@@ -3,17 +3,17 @@
 | Convertor | Format                |
 |-----------|-----------------------|
 | `source`  | [Source](./source/)   |
-| `binary`  | [Binary](./target/)   |
+| `binary`  | [Binary](./binary/)   |
 | `adguard` | [AdGuard](./adguard/) |
 | `clash`   | [Clash](./clash/)     |
-| `surge`  | [Surge](./surge/)     |
+| `surge`   | [Surge](./surge/)     |
 
 ### Source Structure
 
 ```json
 {
   "source_type": "",
-  
+
   ... // Type Specific Fields
 }
 ```
@@ -23,7 +23,7 @@
 ```json
 {
   "target_type": "",
-  
+
   ... // Type Specific Fields
 }
 ```

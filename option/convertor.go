@@ -1,6 +1,8 @@
 package option
 
 import (
+	"strings"
+
 	C "github.com/iantsysog/sing-rule/constant"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
@@ -25,6 +27,9 @@ func (o *ConvertOptions) UnmarshalJSON(bytes []byte) error {
 }
 
 func (o *ConvertOptions) ConvertRequired() bool {
+	if o == nil {
+		return false
+	}
 	if o.SourceType != o.TargetType {
 		return true
 	}
@@ -48,8 +53,9 @@ type _SourceConvertOptions struct {
 type SourceConvertOptions _SourceConvertOptions
 
 func (o SourceConvertOptions) MarshalJSON() ([]byte, error) {
+	sourceType := strings.TrimSpace(o.SourceType)
 	var v any
-	switch o.SourceType {
+	switch sourceType {
 	case C.ConvertorTypeRuleSetSource, C.ConvertorTypeRuleSetBinary:
 	case C.ConvertorTypeAdGuardRuleSet:
 		v = o.AdGuardOptions
@@ -73,6 +79,7 @@ func (o *SourceConvertOptions) UnmarshalJSON(bytes []byte) error {
 	if err != nil {
 		return err
 	}
+	o.SourceType = strings.TrimSpace(o.SourceType)
 	var v any
 	switch o.SourceType {
 	case C.ConvertorTypeRuleSetSource, C.ConvertorTypeRuleSetBinary:
@@ -102,8 +109,9 @@ type _TargetConvertOptions struct {
 type TargetConvertOptions _TargetConvertOptions
 
 func (o TargetConvertOptions) MarshalJSON() ([]byte, error) {
+	targetType := strings.TrimSpace(o.TargetType)
 	var v any
-	switch o.TargetType {
+	switch targetType {
 	case C.ConvertorTypeRuleSetSource, C.ConvertorTypeRuleSetBinary:
 	case C.ConvertorTypeClashRuleProvider:
 		v = o.ClashOptions
@@ -125,6 +133,7 @@ func (o *TargetConvertOptions) UnmarshalJSON(bytes []byte) error {
 	if err != nil {
 		return err
 	}
+	o.TargetType = strings.TrimSpace(o.TargetType)
 	var v any
 	switch o.TargetType {
 	case C.ConvertorTypeRuleSetSource, C.ConvertorTypeRuleSetBinary:

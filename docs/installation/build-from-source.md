@@ -2,13 +2,13 @@
 icon: material/file-code
 ---
 
-# Build from source
+# Build From Source
 
 ## :material-graph: Requirements
 
-* Go 1.23.x
+* Go 1.25.x
 
-You can download and install Go from: https://go.dev/doc/install, latest version is recommended.
+Install Go from [https://go.dev/doc/install](https://go.dev/doc/install). The latest stable version is recommended.
 
 ## :material-fast-forward: Build
 
@@ -16,7 +16,7 @@ You can download and install Go from: https://go.dev/doc/install, latest version
 make
 ```
 
-Or build and install binary to `$GOBIN`:
+Build and install the binary to `$GOBIN`:
 
 ```bash
 make install

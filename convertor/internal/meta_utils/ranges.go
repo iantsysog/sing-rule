@@ -6,94 +6,102 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"golang.org/x/exp/constraints"
 )
 
-type IntRanges[T constraints.Integer] []Range[T]
+type signedInteger interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64
+}
+
+type unsignedInteger interface {
+	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
+}
+
+type integer interface {
+	signedInteger | unsignedInteger
+}
+
+type IntRanges[T integer] []Range[T]
 
 var errIntRanges = errors.New("intRanges error")
 
-func newIntRanges[T constraints.Integer](expected string, parseFn func(string) (T, error)) (IntRanges[T], error) {
-	// example: 200 or 200/302 or 200-400 or 200/204/401-429/501-503
+func newIntRanges[T integer](expected string, parseFn func(string) (T, error)) (IntRanges[T], error) {
 	expected = strings.TrimSpace(expected)
-	if len(expected) == 0 || expected == "*" {
+	if expected == "" || expected == "*" {
 		return nil, nil
 	}
-
-	// support: 200,302 or 200,204,401-429,501-503
 	expected = strings.ReplaceAll(expected, ",", "/")
 	list := strings.Split(expected, "/")
 	if len(list) > 28 {
 		return nil, fmt.Errorf("%w, too many ranges to use, maximum support 28 ranges", errIntRanges)
 	}
-
-	return newIntRangesFromList[T](list, parseFn)
+	return newIntRangesFromList(list, parseFn)
 }
 
-func newIntRangesFromList[T constraints.Integer](list []string, parseFn func(string) (T, error)) (IntRanges[T], error) {
-	var ranges IntRanges[T]
-	for _, s := range list {
-		if s == "" {
+func newIntRangesFromList[T integer](list []string, parseFn func(string) (T, error)) (IntRanges[T], error) {
+	ranges := make(IntRanges[T], 0, len(list))
+	for _, item := range list {
+		item = strings.TrimSpace(item)
+		if item == "" {
 			continue
 		}
-
-		status := strings.Split(s, "-")
-		statusLen := len(status)
-		if statusLen > 2 {
-			return nil, errIntRanges
-		}
-
-		start, err := parseFn(strings.Trim(status[0], "[ ]"))
+		startPart, endPart, hasRange := strings.Cut(item, "-")
+		start, err := parseFn(strings.Trim(startPart, "[] "))
 		if err != nil {
 			return nil, errIntRanges
 		}
-
-		switch statusLen {
-		case 1: // Port range
-			ranges = append(ranges, NewRange(T(start), T(start)))
-		case 2: // Single port
-			end, err := parseFn(strings.Trim(status[1], "[ ]"))
-			if err != nil {
-				return nil, errIntRanges
-			}
-
-			ranges = append(ranges, NewRange(T(start), T(end)))
+		if !hasRange {
+			ranges = append(ranges, NewRange(start, start))
+			continue
 		}
+		if strings.Contains(endPart, "-") {
+			return nil, errIntRanges
+		}
+		end, err := parseFn(strings.Trim(endPart, "[] "))
+		if err != nil {
+			return nil, errIntRanges
+		}
+		ranges = append(ranges, NewRange(start, end))
 	}
-
 	return ranges, nil
 }
 
-func parseUnsigned[T constraints.Unsigned](s string) (T, error) {
-	if val, err := strconv.ParseUint(s, 10, 64); err == nil {
-		return T(val), nil
-	} else {
+func parseUnsigned[T unsignedInteger](s string) (T, error) {
+	value, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
 		return 0, err
 	}
+	typed := T(value)
+	if uint64(typed) != value {
+		return 0, errIntRanges
+	}
+	return typed, nil
 }
 
-func NewUnsignedRanges[T constraints.Unsigned](expected string) (IntRanges[T], error) {
+func NewUnsignedRanges[T unsignedInteger](expected string) (IntRanges[T], error) {
 	return newIntRanges(expected, parseUnsigned[T])
 }
 
-func NewUnsignedRangesFromList[T constraints.Unsigned](list []string) (IntRanges[T], error) {
+func NewUnsignedRangesFromList[T unsignedInteger](list []string) (IntRanges[T], error) {
 	return newIntRangesFromList(list, parseUnsigned[T])
 }
 
-func parseSigned[T constraints.Signed](s string) (T, error) {
-	if val, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return T(val), nil
-	} else {
+func parseSigned[T signedInteger](s string) (T, error) {
+	value, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
 		return 0, err
 	}
+	typed := T(value)
+	if int64(typed) != value {
+		return 0, errIntRanges
+	}
+	return typed, nil
 }
 
-func NewSignedRanges[T constraints.Signed](expected string) (IntRanges[T], error) {
+func NewSignedRanges[T signedInteger](expected string) (IntRanges[T], error) {
 	return newIntRanges(expected, parseSigned[T])
 }
 
-func NewSignedRangesFromList[T constraints.Signed](list []string) (IntRanges[T], error) {
+func NewSignedRangesFromList[T signedInteger](list []string) (IntRanges[T], error) {
 	return newIntRangesFromList(list, parseSigned[T])
 }
 
@@ -101,13 +109,11 @@ func (ranges IntRanges[T]) Check(status T) bool {
 	if len(ranges) == 0 {
 		return true
 	}
-
 	for _, segment := range ranges {
 		if segment.Contains(status) {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -115,36 +121,26 @@ func (ranges IntRanges[T]) String() string {
 	if len(ranges) == 0 {
 		return "*"
 	}
-
 	terms := make([]string, len(ranges))
 	for i, r := range ranges {
 		start := r.Start()
 		end := r.End()
-
-		var term string
 		if start == end {
-			term = strconv.Itoa(int(start))
+			terms[i] = fmt.Sprint(start)
 		} else {
-			term = strconv.Itoa(int(start)) + "-" + strconv.Itoa(int(end))
+			terms[i] = fmt.Sprint(start, "-", end)
 		}
-
-		terms[i] = term
 	}
-
 	return strings.Join(terms, "/")
 }
 
 func (ranges IntRanges[T]) Range(f func(t T) bool) {
-	if len(ranges) == 0 {
-		return
-	}
-
 	for _, r := range ranges {
 		for i := r.Start(); i <= r.End() && i >= r.Start(); i++ {
 			if !f(i) {
 				return
 			}
-			if i+1 < i { // integer overflow
+			if i+1 < i {
 				break
 			}
 		}
@@ -153,21 +149,25 @@ func (ranges IntRanges[T]) Range(f func(t T) bool) {
 
 func (ranges IntRanges[T]) Merge() (mergedRanges IntRanges[T]) {
 	if len(ranges) == 0 {
-		return
+		return nil
 	}
-	sort.Slice(ranges, func(i, j int) bool {
-		return ranges[i].Start() < ranges[j].Start()
+	sorted := append(IntRanges[T](nil), ranges...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Start() < sorted[j].Start()
 	})
-	mergedRanges = ranges[:1]
-	var rangeIndex int
-	for _, r := range ranges[1:] {
-		if mergedRanges[rangeIndex].End()+1 > mergedRanges[rangeIndex].End() && // integer overflow
-			r.Start() > mergedRanges[rangeIndex].End()+1 {
+	mergedRanges = sorted[:1]
+	mergedIndex := 0
+	for _, r := range sorted[1:] {
+		end := mergedRanges[mergedIndex].End()
+		next := end + 1
+		if next > end && r.Start() > next {
 			mergedRanges = append(mergedRanges, r)
-			rangeIndex++
-		} else if r.End() > mergedRanges[rangeIndex].End() {
-			mergedRanges[rangeIndex].end = r.End()
+			mergedIndex++
+			continue
+		}
+		if r.End() > mergedRanges[mergedIndex].End() {
+			mergedRanges[mergedIndex].end = r.End()
 		}
 	}
-	return
+	return mergedRanges
 }

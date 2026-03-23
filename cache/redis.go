@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/iantsysog/sing-rule/adapter"
@@ -12,20 +13,21 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/logger"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
 )
 
 var _ adapter.Cache = (*RedisCache)(nil)
 
 type RedisCache struct {
 	ctx        context.Context
-	options    *redis.UniversalOptions
-	tlsConfig  tls.Config
-	client     redis.UniversalClient
+	client     rueidis.Client
 	expiration time.Duration
 }
 
 func NewRedis(ctx context.Context, expiration time.Duration, options option.RedisCacheOptions) (*RedisCache, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var (
 		address []string
 		server  string
@@ -34,15 +36,18 @@ func NewRedis(ctx context.Context, expiration time.Duration, options option.Redi
 		address = options.Address
 		if firstHost, _, err := net.SplitHostPort(options.Address[0]); err == nil {
 			server = firstHost
+		} else {
+			server = options.Address[0]
 		}
 	} else {
 		address = []string{"localhost:6379"}
+		server = "localhost"
 	}
-	var protocol int
-	if options.Protocol != 0 {
-		protocol = options.Protocol
-	} else {
-		protocol = 3
+	for i, addr := range address {
+		address[i] = strings.TrimSpace(addr)
+		if address[i] == "" {
+			return nil, errors.New("redis address cannot be empty")
+		}
 	}
 	var stdConfig *tls.STDConfig
 	if options.TLS != nil && options.TLS.Enabled {
@@ -55,16 +60,27 @@ func NewRedis(ctx context.Context, expiration time.Duration, options option.Redi
 			return nil, err
 		}
 	}
+	clientOption := rueidis.ClientOption{
+		InitAddress:  address,
+		Username:     options.Username,
+		Password:     options.Password,
+		SelectDB:     options.DB,
+		TLSConfig:    stdConfig,
+		DisableCache: true,
+	}
+	if options.Protocol == 2 {
+		clientOption.AlwaysRESP2 = true
+	}
+	if options.PoolSize > 0 {
+		clientOption.BlockingPoolSize = options.PoolSize
+	}
+	client, err := rueidis.NewClient(clientOption)
+	if err != nil {
+		return nil, err
+	}
 	return &RedisCache{
-		ctx: ctx,
-		client: redis.NewUniversalClient(&redis.UniversalOptions{
-			Addrs:     address,
-			Password:  options.Password,
-			DB:        options.DB,
-			Protocol:  protocol,
-			TLSConfig: stdConfig,
-			PoolSize:  options.PoolSize,
-		}),
+		ctx:        ctx,
+		client:     client,
 		expiration: expiration,
 	}, nil
 }
@@ -74,17 +90,27 @@ func (r *RedisCache) Start() error {
 }
 
 func (r *RedisCache) Close() error {
-	return r.client.Close()
+	if r.client == nil {
+		return nil
+	}
+	r.client.Close()
+	return nil
 }
 
 func (r *RedisCache) LoadBinary(tag string) (*adapter.SavedBinary, error) {
-	binaryBytes, err := r.client.Get(r.ctx, tag).Bytes()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
+	if r.client == nil {
+		return nil, errors.New("redis cache is not initialized")
+	}
+	resp := r.client.Do(r.ctx, r.client.B().Get().Key(tag).Build())
+	if err := resp.Error(); err != nil {
+		if rueidis.IsRedisNil(err) {
 			return nil, nil
-		} else {
-			return nil, err
 		}
+		return nil, err
+	}
+	binaryBytes, err := resp.AsBytes()
+	if err != nil {
+		return nil, err
 	}
 	binary := &adapter.SavedBinary{}
 	err = binary.UnmarshalBinary(binaryBytes)
@@ -95,12 +121,23 @@ func (r *RedisCache) LoadBinary(tag string) (*adapter.SavedBinary, error) {
 }
 
 func (r *RedisCache) SaveBinary(tag string, binary *adapter.SavedBinary) error {
+	if r.client == nil {
+		return errors.New("redis cache is not initialized")
+	}
+	if binary == nil {
+		return r.client.Do(r.ctx, r.client.B().Del().Key(tag).Build()).Error()
+	}
 	binaryBytes, err := binary.MarshalBinary()
 	if err != nil {
 		return err
 	}
-	err = r.client.Set(r.ctx, tag, binaryBytes, r.expiration).Err()
-	if err != nil {
+	var cmd rueidis.Completed
+	if r.expiration > 0 {
+		cmd = r.client.B().Set().Key(tag).Value(string(binaryBytes)).Ex(r.expiration).Build()
+	} else {
+		cmd = r.client.B().Set().Key(tag).Value(string(binaryBytes)).Build()
+	}
+	if err = r.client.Do(r.ctx, cmd).Error(); err != nil {
 		return err
 	}
 	return nil

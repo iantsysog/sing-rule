@@ -18,7 +18,7 @@ import (
 	"github.com/sagernet/sing/common/rw"
 
 	"github.com/klauspost/compress/zstd"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 var MrsMagicBytes = [4]byte{'M', 'R', 'S', 1} // MRSv1
@@ -73,8 +73,8 @@ func fromMrs(content []byte) ([]adapter.Rule, error) {
 			if _, ok := slices.BinarySearch(keys, "+."+key); ok {
 				continue
 			}
-			if strings.HasPrefix(key, "+.") {
-				rule.DomainSuffix = append(rule.DomainSuffix, strings.TrimPrefix(key, "+."))
+			if after, ok := strings.CutPrefix(key, "+."); ok {
+				rule.DomainSuffix = append(rule.DomainSuffix, after)
 			} else {
 				if strings.Contains(key, "+") || strings.Contains(key, "*") {
 					continue
@@ -112,21 +112,28 @@ func toMrs(behavior string, rules []adapter.Rule) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	var behaviorByte byte
+	switch behavior {
+	case "domain":
+		behaviorByte = 0
+	case "ipcidr":
+		behaviorByte = 1
+	default:
+		return nil, E.New("invalid behavior: ", behavior)
+	}
 	var ruleSize int64
 	for _, rule := range rules {
 		if rule.Type != C.RuleTypeDefault || !adapter.IsDestinationAddressRule(rule.DefaultOptions) {
 			continue
 		}
-		if behavior == "domain" {
+		if behaviorByte == 0 {
 			ruleSize += int64(len(rule.DefaultOptions.Domain) + len(rule.DefaultOptions.DomainSuffix))
 		} else {
 			ruleSize += int64(len(rule.DefaultOptions.IPCIDR))
 		}
 	}
-	if behavior == "domain" {
-		encoder.Write([]byte{0})
-	} else {
-		encoder.Write([]byte{1})
+	if _, err = encoder.Write([]byte{behaviorByte}); err != nil {
+		return nil, err
 	}
 	err = binary.Write(encoder, binary.BigEndian, ruleSize)
 	if err != nil {
@@ -142,20 +149,22 @@ func toMrs(behavior string, rules []adapter.Rule) ([]byte, error) {
 		if rule.Type != C.RuleTypeDefault || !adapter.IsDestinationAddressRule(rule.DefaultOptions) {
 			continue
 		}
-		if behavior == "domain" {
-			for _, domain := range rules[0].DefaultOptions.Domain {
+		if behaviorByte == 0 {
+			for _, domain := range rule.DefaultOptions.Domain {
 				domainTrie.Insert(domain, struct{}{})
 			}
-			for _, domainSuffix := range rules[0].DefaultOptions.DomainSuffix {
+			for _, domainSuffix := range rule.DefaultOptions.DomainSuffix {
 				domainTrie.Insert("+."+domainSuffix, struct{}{})
 			}
 		} else {
-			for _, ipCidr := range rules[0].DefaultOptions.IPCIDR {
-				ipCidrTrie.AddIpCidrForString(ipCidr)
+			for _, ipCidr := range rule.DefaultOptions.IPCIDR {
+				if err = ipCidrTrie.AddIpCidrForString(ipCidr); err != nil {
+					return nil, E.Cause(err, "invalid ipcidr: ", ipCidr)
+				}
 			}
 		}
 	}
-	if behavior == "domain" {
+	if behaviorByte == 0 {
 		domainSet := domainTrie.NewDomainSet()
 		if domainSet == nil {
 			return []byte{}, nil

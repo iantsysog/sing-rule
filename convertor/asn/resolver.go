@@ -7,14 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/oschwald/maxminddb-golang/v2"
 	E "github.com/sagernet/sing/common/exceptions"
 	"go4.org/netipx"
 	"golang.org/x/sync/errgroup"
@@ -23,18 +21,11 @@ import (
 
 const (
 	defaultConcurrencyCap = 10
-	defaultASNMMDBURL     = "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb"
-	downloadTimeout       = 60 * time.Second
 	ripeURLTemplate       = "https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS%s"
 	clientRequestTimeout  = 15 * time.Second
 	maxResponseBodyBytes  = 4 << 20
-	maxMMDBFileBytes      = 128 << 20
 	statusOK              = "ok"
 )
-
-type asnMMDBRecord struct {
-	AutonomousSystemNumber uint32 `maxminddb:"autonomous_system_number"`
-}
 
 type ASNProvider interface {
 	ResolveASN(ctx context.Context, asnID string) ([]string, error)
@@ -44,10 +35,6 @@ type ASNResolver struct {
 	cache    sync.Map
 	inflight singleflight.Group
 	provider ASNProvider
-}
-
-type MMDBASNProvider struct {
-	index map[string][]string
 }
 
 type ASNPrefix struct {
@@ -66,10 +53,6 @@ type RIPEASNProvider struct {
 }
 
 func NewASNResolver() (*ASNResolver, error) {
-	provider, err := NewMMDBASNProvider()
-	if err == nil {
-		return NewASNResolverWithProvider(provider), nil
-	}
 	return NewASNResolverWithProvider(NewRIPEASNProvider(nil)), nil
 }
 
@@ -80,53 +63,6 @@ func NewASNResolverWithProvider(provider ASNProvider) *ASNResolver {
 	return &ASNResolver{provider: provider}
 }
 
-func NewMMDBASNProvider() (*MMDBASNProvider, error) {
-	path, cleanup, err := downloadASNMMDBToTemp(defaultASNMMDBURL)
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup()
-	return NewMMDBASNProviderFromPath(path)
-}
-
-func NewMMDBASNProviderFromPath(path string) (*MMDBASNProvider, error) {
-	db, err := maxminddb.Open(path)
-	if err != nil {
-		return nil, E.Cause(err, "open ASN MMDB")
-	}
-	defer db.Close()
-
-	networks := db.Networks(maxminddb.SkipEmptyValues())
-	index := make(map[string][]string)
-
-	for result := range networks {
-		if err := result.Err(); err != nil {
-			return nil, E.Cause(err, "decode ASN MMDB network")
-		}
-
-		var record asnMMDBRecord
-		if err := result.Decode(&record); err != nil {
-			return nil, E.Cause(err, "decode ASN MMDB network")
-		}
-		if record.AutonomousSystemNumber == 0 {
-			continue
-		}
-
-		asnID := strconv.FormatUint(uint64(record.AutonomousSystemNumber), 10)
-		index[asnID] = append(index[asnID], result.Prefix().String())
-	}
-
-	return &MMDBASNProvider{index: index}, nil
-}
-
-func (p *MMDBASNProvider) ResolveASN(_ context.Context, asnID string) ([]string, error) {
-	prefixes, ok := p.index[asnID]
-	if !ok {
-		return nil, nil
-	}
-	return slices.Clone(prefixes), nil
-}
-
 func NewRIPEASNProvider(client *http.Client) *RIPEASNProvider {
 	if client == nil {
 		client = &http.Client{Timeout: clientRequestTimeout}
@@ -135,6 +71,9 @@ func NewRIPEASNProvider(client *http.Client) *RIPEASNProvider {
 }
 
 func (p *RIPEASNProvider) ResolveASN(ctx context.Context, asnID string) ([]string, error) {
+	if p == nil || p.client == nil {
+		return nil, E.New("RIPE provider is not initialized")
+	}
 	var response RIPEResponse
 	if err := p.fetchJSON(ctx, fmt.Sprintf(ripeURLTemplate, asnID), &response); err != nil {
 		return nil, err
@@ -178,48 +117,6 @@ func (p *RIPEASNProvider) fetchJSON(ctx context.Context, url string, target any)
 	return nil
 }
 
-func downloadASNMMDBToTemp(url string) (string, func(), error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return "", nil, E.Cause(err, "create ASN MMDB download request")
-	}
-
-	client := &http.Client{Timeout: downloadTimeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", nil, E.Cause(err, "download ASN MMDB")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", nil, E.New("download ASN MMDB failed: ", resp.Status)
-	}
-
-	file, err := os.CreateTemp("", "sing-rule-asn-*.mmdb")
-	if err != nil {
-		return "", nil, E.Cause(err, "create ASN MMDB file")
-	}
-	path := file.Name()
-
-	body := io.LimitReader(resp.Body, maxMMDBFileBytes+1)
-	written, copyErr := io.Copy(file, body)
-	closeErr := file.Close()
-	if copyErr != nil {
-		_ = os.Remove(path)
-		return "", nil, E.Cause(copyErr, "write ASN MMDB file")
-	}
-	if closeErr != nil {
-		_ = os.Remove(path)
-		return "", nil, E.Cause(closeErr, "close ASN MMDB file")
-	}
-	if written > maxMMDBFileBytes {
-		_ = os.Remove(path)
-		return "", nil, E.New("ASN MMDB exceeds max allowed size")
-	}
-
-	return path, func() { _ = os.Remove(path) }, nil
-}
-
 func readAllWithLimit(r io.Reader, limit int64) ([]byte, error) {
 	reader := io.LimitReader(r, limit+1)
 	body, err := io.ReadAll(reader)
@@ -255,6 +152,9 @@ func validateASN(asn string) error {
 }
 
 func (r *ASNResolver) ResolveASN(ctx context.Context, asn string) ([]string, error) {
+	if r == nil || r.provider == nil {
+		return nil, E.New("ASN resolver is not initialized")
+	}
 	asnID := normalizeASN(asn)
 	if err := validateASN(asnID); err != nil {
 		return nil, err
@@ -269,7 +169,7 @@ func (r *ASNResolver) ResolveASN(ctx context.Context, asn string) ([]string, err
 			return prefixes, nil
 		}
 
-		prefixes, resolveErr := r.provider.ResolveASN(ctx, asnID)
+		prefixes, resolveErr := r.provider.ResolveASN(providerContext(ctx), asnID)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
@@ -307,24 +207,27 @@ func (r *ASNResolver) ResolveASNs(ctx context.Context, asns []string) ([]string,
 	if len(asns) == 0 {
 		return nil, nil
 	}
+	asnList, err := normalizeAndUniqueASNs(asns)
+	if err != nil {
+		return nil, err
+	}
 
-	results := make([][]string, len(asns))
+	results := make([][]string, len(asnList))
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(defaultConcurrencyCap)
 
-	for i := range asns {
-		i := i
+	for i := range asnList {
 		g.Go(func() error {
-			prefixes, err := r.ResolveASN(ctx, asns[i])
+			prefixes, err := r.ResolveASN(ctx, asnList[i])
 			if err != nil {
-				return E.Cause(err, "resolve ASN: ", asns[i])
+				return E.Cause(err, "resolve ASN: ", asnList[i])
 			}
 			results[i] = prefixes
 			return nil
 		})
 	}
 
-	if err := g.Wait(); err != nil {
+	if err = g.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -370,4 +273,28 @@ func (r *ASNResolver) mergePrefixes(prefixes []string) []string {
 		return nil
 	}
 	return result
+}
+
+func normalizeAndUniqueASNs(asns []string) ([]string, error) {
+	result := make([]string, 0, len(asns))
+	seen := make(map[string]struct{}, len(asns))
+	for _, asn := range asns {
+		asnID := normalizeASN(asn)
+		if err := validateASN(asnID); err != nil {
+			return nil, err
+		}
+		if _, exists := seen[asnID]; exists {
+			continue
+		}
+		seen[asnID] = struct{}{}
+		result = append(result, asnID)
+	}
+	return result, nil
+}
+
+func providerContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return context.WithoutCancel(ctx)
 }

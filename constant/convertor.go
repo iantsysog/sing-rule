@@ -1,9 +1,11 @@
 package constant
 
+type ConvertorType = string
+
 const (
-	ConvertorTypeRuleSetSource     = "source"
-	ConvertorTypeRuleSetBinary     = "binary"
-	ConvertorTypeAdGuardRuleSet    = "adguard"
-	ConvertorTypeClashRuleProvider = "clash"
-	ConvertorTypeSurgeRuleSet      = "surge"
+	ConvertorTypeRuleSetSource     ConvertorType = "source"
+	ConvertorTypeRuleSetBinary     ConvertorType = "binary"
+	ConvertorTypeAdGuardRuleSet    ConvertorType = "adguard"
+	ConvertorTypeClashRuleProvider ConvertorType = "clash"
+	ConvertorTypeSurgeRuleSet      ConvertorType = "surge"
 )
