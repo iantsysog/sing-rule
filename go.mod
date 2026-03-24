@@ -7,7 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/klauspost/compress v1.18.5
 	github.com/openacid/low v0.1.21
-	github.com/redis/rueidis v1.0.68
+	github.com/redis/rueidis v1.0.73
 	github.com/sagernet/sing v0.8.3-0.20260315153529-ed51f65fbfde
 	github.com/sagernet/sing-box v1.14.0-alpha.4
 	github.com/stretchr/testify v1.11.1
@@ -65,7 +65,6 @@ require (
 	go.uber.org/zap v1.27.1 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
 	golang.org/x/sys v0.42.0 // indirect
