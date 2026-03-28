@@ -9,7 +9,7 @@ require (
 	github.com/openacid/low v0.1.21
 	github.com/redis/rueidis v1.0.73
 	github.com/sagernet/sing v0.8.3-0.20260315153529-ed51f65fbfde
-	github.com/sagernet/sing-box v1.14.0-alpha.6
+	github.com/sagernet/sing-box v1.14.0-alpha.7
 	github.com/stretchr/testify v1.11.1
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/mod v0.34.0
