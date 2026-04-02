@@ -45,40 +45,41 @@ func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, erro
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	pathTemplate := template.New("remote URL")
-	pathTemplate.Funcs(template.FuncMap{
+
+	pathTemplate := template.New("remote_url").Funcs(template.FuncMap{
 		"toLower": strings.ToLower,
 		"toUpper": strings.ToUpper,
 	})
-	_, err := pathTemplate.Parse(options.RemoteOptions.URL)
-	if err != nil {
+	if _, err := pathTemplate.Parse(options.RemoteOptions.URL); err != nil {
 		return nil, err
 	}
+
 	var serverAddress string
 	if serverURL, err := url.Parse(options.RemoteOptions.URL); err == nil {
 		if hostname := serverURL.Hostname(); M.IsDomainName(hostname) {
 			serverAddress = hostname
 		}
 	}
+
 	remoteDialer, err := dialer.NewDefault(ctx, options.RemoteOptions.DialerOptions)
 	if err != nil {
 		return nil, err
 	}
+
 	var tlsConfig tls.Config
 	if options.RemoteOptions.TLS != nil && options.RemoteOptions.TLS.Enabled {
 		tlsConfig, err = tls.NewClient(ctx, logger.NOP(), serverAddress, common.PtrValueOrDefault(options.RemoteOptions.TLS))
 		if err != nil {
-			return nil, E.Cause(err, "create TLS config")
+			return nil, E.Cause(err, "initialize TLS configuration")
 		}
 	}
+
 	dnsTransport := common.Must1(local.NewTransport(ctx, logger.NOP(), "", boxOption.LocalDNSServerOptions{}))
-	dnsClient := dns.NewClient(dns.ClientOptions{
-		Logger: logger.NOP(),
-	})
+	resolver := dns.NewClient(dns.ClientOptions{Logger: logger.NOP()})
 	dialRemote := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		destination := M.ParseSocksaddr(addr)
 		if M.IsDomainName(destination.Fqdn) {
-			addresses, lookupErr := dnsClient.Lookup(ctx, dnsTransport, destination.Fqdn, boxAdapter.DNSQueryOptions{}, nil)
+			addresses, lookupErr := resolver.Lookup(ctx, dnsTransport, destination.Fqdn, boxAdapter.DNSQueryOptions{}, nil)
 			if lookupErr != nil {
 				return nil, lookupErr
 			}
@@ -86,41 +87,42 @@ func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, erro
 		}
 		return remoteDialer.DialContext(ctx, network, destination)
 	}
-	var httpTransport *http.Transport
-	if tlsConfig != nil {
-		httpTransport = &http.Transport{
-			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				conn, err := dialRemote(ctx, network, addr)
-				if err != nil {
-					return nil, err
-				}
-				tlsConn, err := aTLS.ClientHandshake(ctx, conn, tlsConfig)
-				if err != nil {
-					conn.Close()
-					return nil, err
-				}
-				return tlsConn, nil
-			},
-			ForceAttemptHTTP2: true,
-		}
-	} else {
-		httpTransport = &http.Transport{
-			DialContext:       dialRemote,
-			ForceAttemptHTTP2: true,
-		}
+
+	httpTransport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
 	}
-	var userAgent string
-	if options.RemoteOptions.UserAgent != "" {
-		userAgent = options.RemoteOptions.UserAgent
+	if tlsConfig != nil {
+		httpTransport.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dialRemote(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			tlsConn, err := aTLS.ClientHandshake(ctx, conn, tlsConfig)
+			if err != nil {
+				_ = conn.Close()
+				return nil, err
+			}
+			return tlsConn, nil
+		}
 	} else {
+		httpTransport.DialContext = dialRemote
+	}
+
+	userAgent := options.RemoteOptions.UserAgent
+	if userAgent == "" {
 		userAgent = F.ToString("srsc/", C.Version, "(sing-box ", C.CoreVersion(), ")")
 	}
-	var ttl time.Duration
+
+	ttl := C.DefaultTTL
 	if options.RemoteOptions.TTL > 0 {
 		ttl = options.RemoteOptions.TTL.Build()
-	} else {
-		ttl = C.DefaultTTL
 	}
+
 	return &Remote{
 		ctx:          ctx,
 		pathTemplate: pathTemplate,
@@ -138,29 +140,29 @@ func (s *Remote) Path(urlParams map[string]string) (sourcePath string, err error
 	}
 	pathBuffer := buf.New()
 	defer pathBuffer.Release()
-	err = s.pathTemplate.Execute(pathBuffer, urlParams)
-	if err != nil {
-		return
+	if err = s.pathTemplate.Execute(pathBuffer, urlParams); err != nil {
+		return "", err
 	}
-	sourcePath = string(pathBuffer.Bytes())
-	return
+	return string(pathBuffer.Bytes()), nil
 }
 
 func (s *Remote) LastUpdated(_ string) time.Time {
 	return time.Time{}
 }
 
-func (s *Remote) Fetch(path string, requestBody adapter.FetchRequestBody) (body *adapter.FetchResponseBody, err error) {
+func (s *Remote) Fetch(path string, requestBody adapter.FetchRequestBody) (*adapter.FetchResponseBody, error) {
 	if s == nil || s.httpClient == nil {
 		return nil, E.New("remote source is not initialized")
 	}
+	if parsedURL, err := url.Parse(path); err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return nil, E.New("fetch source: invalid URL")
+	}
+
 	now := time.Now()
 	if !requestBody.LastUpdated.IsZero() && now.Sub(requestBody.LastUpdated) < s.ttl {
-		return &adapter.FetchResponseBody{
-			NotModified: true,
-			LastUpdated: requestBody.LastUpdated,
-		}, nil
+		return &adapter.FetchResponseBody{NotModified: true, LastUpdated: requestBody.LastUpdated}, nil
 	}
+
 	requestCtx := s.ctx
 	if requestCtx == nil {
 		requestCtx = context.Background()
@@ -173,32 +175,42 @@ func (s *Remote) Fetch(path string, requestBody adapter.FetchRequestBody) (body 
 	if requestBody.ETag != "" {
 		request.Header.Set("If-None-Match", requestBody.ETag)
 	}
+	if !requestBody.LastUpdated.IsZero() {
+		request.Header.Set("If-Modified-Since", requestBody.LastUpdated.UTC().Format(http.TimeFormat))
+	}
+
 	response, err := s.httpClient.Do(request)
 	if err != nil {
-		return nil, E.Cause(err, "fetch source: exchange HTTP request")
+		return nil, E.Cause(err, "fetch source: execute HTTP request")
 	}
 	defer response.Body.Close()
+
+	lastUpdated := now
+	if modifiedAt := response.Header.Get("Last-Modified"); modifiedAt != "" {
+		if parsedTime, parseErr := time.Parse(http.TimeFormat, modifiedAt); parseErr == nil {
+			lastUpdated = parsedTime
+		}
+	}
+
 	switch response.StatusCode {
 	case http.StatusNotModified:
-		return &adapter.FetchResponseBody{
-			NotModified: true,
-			LastUpdated: now,
-		}, nil
+		return &adapter.FetchResponseBody{NotModified: true, LastUpdated: lastUpdated}, nil
 	case http.StatusOK:
 	default:
-		return nil, E.New("fetch source: unexpected HTTP response: " + response.Status)
+		return nil, E.New("fetch source: unexpected HTTP status: ", response.Status)
 	}
+
 	content, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, E.Cause(err, "fetch source: read HTTP response")
+		return nil, E.Cause(err, "fetch source: read HTTP response body")
 	}
 	if len(content) == 0 {
 		return nil, errors.New("fetch source: empty HTTP response")
 	}
-	newETag := response.Header.Get("ETag")
+
 	return &adapter.FetchResponseBody{
 		Content:     content,
-		ETag:        newETag,
-		LastUpdated: now,
+		ETag:        response.Header.Get("ETag"),
+		LastUpdated: lastUpdated,
 	}, nil
 }

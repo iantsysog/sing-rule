@@ -50,12 +50,15 @@ type Options struct {
 func NewServer(options Options) (*Server, error) {
 	createdAt := time.Now()
 	ctx := options.Context
-	var logFactory log.Factory
-	var err error
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	ctx = service.ContextWithDefaultRegistry(ctx)
+
+	var (
+		logFactory log.Factory
+		err        error
+	)
 	if options.Logger == nil {
 		logFactory, err = log.New(log.Options{
 			Context:  ctx,
@@ -67,16 +70,19 @@ func NewServer(options Options) (*Server, error) {
 		}
 		options.Logger = logFactory.Logger()
 	}
+
 	serviceCache, err := cache.New(ctx, common.PtrValueOrDefault(options.Cache))
 	if err != nil {
 		return nil, E.Cause(err, "create cache")
 	}
 	service.MustRegister(ctx, serviceCache)
-	resourceManage, err := resource.NewManager(ctx, options.Logger, common.PtrValueOrDefault(options.Resources))
+
+	resourceManager, err := resource.NewManager(ctx, options.Logger, common.PtrValueOrDefault(options.Resources))
 	if err != nil {
-		return nil, E.Cause(err, "create resource manager")
+		return nil, E.Cause(err, "initialize resource manager")
 	}
-	service.MustRegister[adapter.ResourceManager](ctx, resourceManage)
+	service.MustRegister[adapter.ResourceManager](ctx, resourceManager)
+
 	router := chi.NewRouter()
 	s := &Server{
 		createdAt:  createdAt,
@@ -94,36 +100,44 @@ func NewServer(options Options) (*Server, error) {
 		}),
 		cache: serviceCache,
 	}
+
 	if options.Endpoints == nil || options.Endpoints.Size() == 0 {
 		return nil, E.New("missing endpoints")
 	}
 	for index, entry := range options.Endpoints.Entries() {
 		if !strings.HasPrefix(entry.Key, "/") {
-			return nil, E.New("routing pattern must begin with '/': [", index, "]: ", entry.Key)
+			return nil, E.New("route pattern must start with '/': [", index, "]: ", entry.Key)
 		}
 		switch entry.Value.Type {
 		case C.EndpointTypeFile:
-			handler, err := endpoint.NewFileEndpoint(ctx, options.Logger, index, entry.Value.FileOptions)
-			if err != nil {
-				return nil, err
+			handler, handlerErr := endpoint.NewFileEndpoint(ctx, options.Logger, index, entry.Value.FileOptions)
+			if handlerErr != nil {
+				return nil, E.Cause(handlerErr, "initialize file endpoint")
 			}
 			router.Get(entry.Key, handler.ServeHTTP)
 		default:
-			return nil, E.New("unknown endpoint type: " + entry.Value.Type)
+			return nil, E.New("unsupported endpoint type: ", entry.Value.Type)
 		}
 	}
+
 	s.httpServer = &http.Server{
 		Handler:           router,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
 	}
+
 	if options.TLS != nil {
-		tlsConfig, err := tls.NewServer(ctx, options.Logger, common.PtrValueOrDefault(options.TLS))
-		if err != nil {
-			return nil, err
+		tlsConfig, tlsErr := tls.NewServer(ctx, options.Logger, common.PtrValueOrDefault(options.TLS))
+		if tlsErr != nil {
+			return nil, tlsErr
 		}
 		s.tlsConfig = tlsConfig
 	}
+
 	return s, nil
 }
 
@@ -134,36 +148,37 @@ func (s *Server) Start() error {
 		}
 	}
 	if s.cache != nil {
-		err := s.cache.Start()
-		if err != nil {
+		if err := s.cache.Start(); err != nil {
 			return E.Cause(err, "start cache")
 		}
 	}
 	if s.tlsConfig != nil {
-		err := s.tlsConfig.Start()
-		if err != nil {
-			return E.Cause(err, "create TLS config")
+		if err := s.tlsConfig.Start(); err != nil {
+			return E.Cause(err, "initialize TLS configuration")
 		}
 	}
 	if s.listener == nil || s.httpServer == nil {
 		return E.New("server is not initialized")
 	}
+
 	tcpListener, err := s.listener.ListenTCP()
 	if err != nil {
 		return err
 	}
 	if s.tlsConfig != nil {
 		if !common.Contains(s.tlsConfig.NextProtos(), http2.NextProtoTLS) {
-			s.tlsConfig.SetNextProtos(append([]string{"h2"}, s.tlsConfig.NextProtos()...))
+			s.tlsConfig.SetNextProtos(append([]string{http2.NextProtoTLS}, s.tlsConfig.NextProtos()...))
 		}
 		tcpListener = aTLS.NewListener(tcpListener, s.tlsConfig)
 	}
+
 	go func() {
 		serveErr := s.httpServer.Serve(tcpListener)
-		if serveErr != nil && !errors.Is(serveErr, net.ErrClosed) {
-			s.logger.Error("serve error: ", serveErr)
+		if serveErr != nil && !errors.Is(serveErr, net.ErrClosed) && !errors.Is(serveErr, http.ErrServerClosed) {
+			s.logger.Error("http server stopped with error: ", serveErr)
 		}
 	}()
+
 	s.logger.Info("srsc started (", F.Seconds(time.Since(s.createdAt).Seconds()), "s)")
 	return nil
 }
@@ -172,8 +187,8 @@ func (s *Server) Close() error {
 	var serverErr error
 	if s.httpServer != nil {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		serverErr = s.httpServer.Shutdown(shutdownCtx)
-		cancel()
 	}
 	return errors.Join(serverErr, common.Close(
 		common.PtrOrNil(s.listener),
