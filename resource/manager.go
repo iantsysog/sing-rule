@@ -163,7 +163,7 @@ func (m *Manager) fetch(r *Resource, cachePath string, cacheKey string) (*boxOpt
 		if cachedBinary == nil {
 			return nil, E.New("fetch source: unexpected not modified response")
 		}
-		if response.LastUpdated != cachedBinary.LastUpdated {
+		if !response.LastUpdated.Equal(cachedBinary.LastUpdated) {
 			cachedBinary.LastUpdated = response.LastUpdated
 			err = m.cache.SaveBinary(cacheKey, cachedBinary)
 			if err != nil {

@@ -76,6 +76,7 @@ func (o *SourceOptions) UnmarshalJSON(bytes []byte) error {
 }
 
 type LocalSource struct {
+	Root string `json:"root,omitempty"`
 	Path string `json:"path,omitempty"`
 }
 
@@ -83,6 +84,8 @@ type RemoteSource struct {
 	URL       string             `json:"url,omitempty"`
 	UserAgent string             `json:"user_agent,omitempty"`
 	TTL       badoption.Duration `json:"ttl,omitempty"`
+	Timeout   badoption.Duration `json:"timeout,omitempty"`
+	Context   string             `json:"context,omitempty"`
 	option.OutboundTLSOptionsContainer
 	option.DialerOptions
 }

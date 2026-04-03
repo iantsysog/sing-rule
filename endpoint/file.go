@@ -111,7 +111,7 @@ func (f *FileEndpoint) serve(w http.ResponseWriter, r *http.Request) (int, error
 		if cachedBinary == nil {
 			return http.StatusBadGateway, E.New("fetch source: unexpected not modified response")
 		}
-		if !response.LastUpdated.IsZero() && response.LastUpdated != cachedBinary.LastUpdated {
+		if !response.LastUpdated.IsZero() && !response.LastUpdated.Equal(cachedBinary.LastUpdated) {
 			cachedBinary.LastUpdated = response.LastUpdated
 			if err = f.cache.SaveBinary(cacheKey, cachedBinary); err != nil {
 				return http.StatusInternalServerError, E.Cause(err, "save cache binary")

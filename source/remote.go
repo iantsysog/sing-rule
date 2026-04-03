@@ -39,6 +39,8 @@ type Remote struct {
 	httpClient   *http.Client
 	userAgent    string
 	ttl          time.Duration
+	timeout      time.Duration
+	contextMode  string
 }
 
 func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, error) {
@@ -123,14 +125,27 @@ func NewRemote(ctx context.Context, options option.SourceOptions) (*Remote, erro
 		ttl = options.RemoteOptions.TTL.Build()
 	}
 
+	requestTimeout := 30 * time.Second
+	if options.RemoteOptions.Timeout > 0 {
+		requestTimeout = options.RemoteOptions.Timeout.Build()
+	}
+
+	contextMode := strings.TrimSpace(options.RemoteOptions.Context)
+	if contextMode == "" {
+		contextMode = "without_cancel"
+	}
+
 	return &Remote{
 		ctx:          ctx,
 		pathTemplate: pathTemplate,
 		httpClient: &http.Client{
 			Transport: httpTransport,
+			Timeout:   requestTimeout,
 		},
 		userAgent: userAgent,
 		ttl:       ttl,
+		timeout:   requestTimeout,
+		contextMode: contextMode,
 	}, nil
 }
 
@@ -163,9 +178,25 @@ func (s *Remote) Fetch(path string, requestBody adapter.FetchRequestBody) (*adap
 		return &adapter.FetchResponseBody{NotModified: true, LastUpdated: requestBody.LastUpdated}, nil
 	}
 
-	requestCtx := s.ctx
-	if requestCtx == nil {
+	baseCtx := s.ctx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	var requestCtx context.Context
+	var cancel context.CancelFunc
+	switch s.contextMode {
+	case "inherit":
+		requestCtx = baseCtx
+	case "without_cancel":
+		requestCtx = context.WithoutCancel(baseCtx)
+	case "background":
 		requestCtx = context.Background()
+	default:
+		return nil, E.New("fetch source: invalid context mode: ", s.contextMode)
+	}
+	if s.timeout > 0 {
+		requestCtx, cancel = context.WithTimeout(requestCtx, s.timeout)
+		defer cancel()
 	}
 	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, path, nil)
 	if err != nil {
