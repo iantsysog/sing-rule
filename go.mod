@@ -8,8 +8,8 @@ require (
 	github.com/klauspost/compress v1.18.5
 	github.com/openacid/low v0.1.21
 	github.com/redis/rueidis v1.0.73
-	github.com/sagernet/sing v0.8.4
-	github.com/sagernet/sing-box v1.14.0-alpha.8
+	github.com/sagernet/sing v0.8.5-0.20260404181712-947827ec3849
+	github.com/sagernet/sing-box v1.14.0-alpha.10
 	github.com/stretchr/testify v1.11.1
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/mod v0.34.0
@@ -54,7 +54,7 @@ require (
 	github.com/sagernet/netlink v0.0.0-20240916134442-83396419aa8b // indirect
 	github.com/sagernet/nftables v0.3.0-mod.1 // indirect
 	github.com/sagernet/sing-mux v0.3.4 // indirect
-	github.com/sagernet/sing-tun v0.8.7-0.20260323120017-8eb4e8acfc2d // indirect
+	github.com/sagernet/sing-tun v0.8.8-0.20260410061515-018f5eaae695 // indirect
 	github.com/sagernet/sing-vmess v0.2.8-0.20250909125414-3aed155119a1 // indirect
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1 // indirect
 	github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 // indirect
