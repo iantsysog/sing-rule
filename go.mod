@@ -12,7 +12,7 @@ require (
 	github.com/sagernet/sing-box v1.14.0-alpha.11
 	github.com/stretchr/testify v1.11.1
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
-	golang.org/x/mod v0.34.0
+	golang.org/x/mod v0.35.0
 	golang.org/x/net v0.53.0
 	golang.org/x/sync v0.20.0
 	sigs.k8s.io/yaml v1.6.0
