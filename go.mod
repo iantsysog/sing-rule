@@ -8,8 +8,8 @@ require (
 	github.com/klauspost/compress v1.18.5
 	github.com/openacid/low v0.1.21
 	github.com/redis/rueidis v1.0.74
-	github.com/sagernet/sing v0.8.5-0.20260404181712-947827ec3849
-	github.com/sagernet/sing-box v1.14.0-alpha.11
+	github.com/sagernet/sing v0.8.7-0.20260416084641-60846c117dd8
+	github.com/sagernet/sing-box v1.14.0-alpha.13
 	github.com/stretchr/testify v1.11.1
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/mod v0.35.0
@@ -48,11 +48,13 @@ require (
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a // indirect
 	github.com/sagernet/fswatch v0.1.1 // indirect
 	github.com/sagernet/gvisor v0.0.0-20250811-sing-box-mod.1 // indirect
 	github.com/sagernet/netlink v0.0.0-20240916134442-83396419aa8b // indirect
 	github.com/sagernet/nftables v0.3.0-mod.1 // indirect
+	github.com/sagernet/quic-go v0.59.0-sing-box-mod.4 // indirect
 	github.com/sagernet/sing-mux v0.3.4 // indirect
 	github.com/sagernet/sing-tun v0.8.8-0.20260410061515-018f5eaae695 // indirect
 	github.com/sagernet/sing-vmess v0.2.8-0.20250909125414-3aed155119a1 // indirect

@@ -94,6 +94,8 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/quic-go/qpack v0.6.0 h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8=
+github.com/quic-go/qpack v0.6.0/go.mod h1:lUpLKChi8njB4ty2bFLX2x4gzDqXwUpaO1DP9qMDZII=
 github.com/redis/rueidis v1.0.74 h1:J5ZNyxMqX+sDQxQztRI928W6TrERpo+pHSwhftnX7NA=
 github.com/redis/rueidis v1.0.74/go.mod h1:lfdcZzJ1oKGKL37vh9fO3ymwt+0TdjkkUCJxbgpmcgQ=
 github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a h1:+NkI2670SQpQWvkkD2QgdTuzQG263YZ+2emfpeyGqW0=
@@ -108,10 +110,10 @@ github.com/sagernet/nftables v0.3.0-mod.1 h1:OMe+qoEAx8EipYAQbD2FI5erVvKmTS9+cYh
 github.com/sagernet/nftables v0.3.0-mod.1/go.mod h1:8kslHG4VvYNihcco+i6uxIX7qbT8A56T0y5q7U44ZaQ=
 github.com/sagernet/quic-go v0.59.0-sing-box-mod.4 h1:6qvrUW79S+CrPwWz6cMePXohgjHoKxLo3c+MDhNwc3o=
 github.com/sagernet/quic-go v0.59.0-sing-box-mod.4/go.mod h1:OqILvS182CyOol5zNNo6bguvOGgXzV459+chpRaUC+4=
-github.com/sagernet/sing v0.8.5-0.20260404181712-947827ec3849 h1:P8jaGN561IbHBxjlU8IGrFK65n1vDOrHo8FOMgHfn14=
-github.com/sagernet/sing v0.8.5-0.20260404181712-947827ec3849/go.mod h1:ARkL0gM13/Iv5VCZmci/NuoOlePoIsW0m7BWfln/Hak=
-github.com/sagernet/sing-box v1.14.0-alpha.11 h1:oNMPIo5KptOO5ZkmLOzUOljM5qagDK2P6sGJIfDIqnE=
-github.com/sagernet/sing-box v1.14.0-alpha.11/go.mod h1:eqNr8TgBf2cjePeH/GymAtEC8Vb30RryJerqD0fnAHY=
+github.com/sagernet/sing v0.8.7-0.20260416084641-60846c117dd8 h1:gBTi6DvU/F/ZKcq9HvEWpT/DhpNU68FTGHK2c+m80vo=
+github.com/sagernet/sing v0.8.7-0.20260416084641-60846c117dd8/go.mod h1:ARkL0gM13/Iv5VCZmci/NuoOlePoIsW0m7BWfln/Hak=
+github.com/sagernet/sing-box v1.14.0-alpha.13 h1:ZKpV324fTPFmwdVDXLyCIm7OcTf+xbGWBv15fBbYyQU=
+github.com/sagernet/sing-box v1.14.0-alpha.13/go.mod h1:MVh7xJvLiOmTa3ucHM3P6IB+v+iSjNwbsjiQ7amDdaI=
 github.com/sagernet/sing-mux v0.3.4 h1:ZQplKl8MNXutjzbMVtWvWG31fohhgOfCuUZR4dVQ8+s=
 github.com/sagernet/sing-mux v0.3.4/go.mod h1:QvlKMyNBNrQoyX4x+gq028uPbLM2XeRpWtDsWBJbFSk=
 github.com/sagernet/sing-tun v0.8.8-0.20260410061515-018f5eaae695 h1:2maqN3XuorEo5faXHIyYZQZ1/ybim4hImfCEWZwdPbk=
