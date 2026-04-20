@@ -8,7 +8,7 @@ require (
 	github.com/klauspost/compress v1.18.5
 	github.com/openacid/low v0.1.21
 	github.com/redis/rueidis v1.0.74
-	github.com/sagernet/sing v0.8.5-0.20260404181712-947827ec3849
+	github.com/sagernet/sing v0.8.8
 	github.com/sagernet/sing-box v1.14.0-alpha.11
 	github.com/stretchr/testify v1.11.1
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
